@@ -4,6 +4,10 @@ nginx/certbot/*
 !nginx/certs/.keep
 
 .vscode/
+.idea/
+*.code-workspace
+.DS_Store
+Thumbs.db
 media/
 github_kli*
 
@@ -69,6 +73,7 @@ cover/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
+*.sqlite3
 
 # Flask stuff:
 instance/

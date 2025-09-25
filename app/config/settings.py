@@ -10,13 +10,21 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.0/ref/settings/
 """
 
-import os
 import json
+import os
+import sys
 
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load variables defined in .env files.
+for env_file in (BASE_DIR / ".env", BASE_DIR.parent / ".env"):
+    if env_file.exists():
+        load_dotenv(env_file)
 
 try:
     with open(os.path.join(BASE_DIR, 'config.json')) as config_file:
@@ -127,19 +135,46 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.0/ref/settings/#databases
 
+def _build_mssql_extra_params():
+    extra_params = []
+    encrypt = get_var('MSSQL_ENCRYPT')
+    if encrypt:
+        extra_params.append(f"Encrypt={encrypt}")
+    trust = get_var('MSSQL_TRUST_CERT')
+    if trust:
+        extra_params.append(f"TrustServerCertificate={trust}")
+    return ';'.join(extra_params)
+
+
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'HOST': get_var('DB_HOST'),
-        'NAME': get_var('DB_NAME'),
-        'USER': get_var('DB_USER'),
-        'PASSWORD': get_var('DB_PASS'),
+        'ENGINE': 'mssql',
+        'HOST': get_var('MSSQL_HOST', 'localhost'),
+        'NAME': get_var('MSSQL_DB', ''),
+        'USER': get_var('MSSQL_USER', ''),
+        'PASSWORD': get_var('MSSQL_PASSWORD', ''),
+        'PORT': get_var('MSSQL_PORT', '1433'),
         'OPTIONS': {
-            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-            'charset': 'utf8mb4',
+            'driver': get_var('MSSQL_DRIVER', 'ODBC Driver 18 for SQL Server'),
+            'host_is_server': True,
         },
     }
 }
+
+extra_params = _build_mssql_extra_params()
+if extra_params:
+    DATABASES['default']['OPTIONS']['extra_params'] = extra_params
+
+tds_version = get_var('MSSQL_TDS_VERSION')
+if tds_version:
+    DATABASES['default']['OPTIONS']['tds_version'] = tds_version
+
+# Use SQLite for automated tests to keep the suite lightweight.
+if 'test' in sys.argv:
+    DATABASES['default'] = {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+    }
 
 # Password validation
 # https://docs.djangoproject.com/en/4.0/ref/settings/#auth-password-validators
