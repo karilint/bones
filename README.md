@@ -17,7 +17,8 @@ loaded automatically by `settings.py`.
 
    ```bash
    python -m venv .venv
-   source .venv/bin/activate
+   source .venv/bin/activate (Unix/Bash)
+   .\.venv\Scripts\Activate.ps1 (windows/Powershell)
    ```
 
 2. **Install the required Python packages**
