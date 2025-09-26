@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Hello, world!</title>
+  </head>
+  <body>
+    <h1>Hello, world!</h1>
+    {% if completed_transects_count is not None %}
+    <p>CompletedTransects count: {{ completed_transects_count }}</p>
+    {% else %}
+    <p>CompletedTransects count is currently unavailable.</p>
+    {% endif %}
+  </body>
+</html>
