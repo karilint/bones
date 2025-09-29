@@ -1,0 +1,1 @@
+"""Bones Django application package."""
