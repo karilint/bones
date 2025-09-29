@@ -1,0 +1,44 @@
+{# Accessible pagination controls that preserve active filters. #}
+{% if is_paginated %}
+    <nav class="w3-margin-top" aria-label="Pagination">
+        <ul class="w3-pagination w3-border w3-round-large">
+            {% with qs=filter_querystring %}
+                <li>
+                    {% if page_obj.has_previous %}
+                        <a class="w3-button" href="?page=1{{ qs }}" aria-label="First page">&laquo;</a>
+                    {% else %}
+                        <span class="w3-button w3-disabled" aria-hidden="true">&laquo;</span>
+                    {% endif %}
+                </li>
+                <li>
+                    {% if page_obj.has_previous %}
+                        <a class="w3-button" href="?page={{ page_obj.previous_page_number }}{{ qs }}" aria-label="Previous page">&lsaquo;</a>
+                    {% else %}
+                        <span class="w3-button w3-disabled" aria-hidden="true">&lsaquo;</span>
+                    {% endif %}
+                </li>
+                {% for num in page_obj.paginator.page_range %}
+                    {% if num == page_obj.number %}
+                        <li><span class="w3-button w3-blue" aria-current="page">{{ num }}</span></li>
+                    {% else %}
+                        <li><a class="w3-button" href="?page={{ num }}{{ qs }}">{{ num }}</a></li>
+                    {% endif %}
+                {% endfor %}
+                <li>
+                    {% if page_obj.has_next %}
+                        <a class="w3-button" href="?page={{ page_obj.next_page_number }}{{ qs }}" aria-label="Next page">&rsaquo;</a>
+                    {% else %}
+                        <span class="w3-button w3-disabled" aria-hidden="true">&rsaquo;</span>
+                    {% endif %}
+                </li>
+                <li>
+                    {% if page_obj.has_next %}
+                        <a class="w3-button" href="?page={{ page_obj.paginator.num_pages }}{{ qs }}" aria-label="Last page">&raquo;</a>
+                    {% else %}
+                        <span class="w3-button w3-disabled" aria-hidden="true">&raquo;</span>
+                    {% endif %}
+                </li>
+            {% endwith %}
+        </ul>
+    </nav>
+{% endif %}
