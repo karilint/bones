@@ -78,6 +78,51 @@ class FilteredListViewMixin:
 
     def get_filterset(self, queryset=None):
         filterset_class = self.get_filterset_class()
+        filterset = filterset_class(
+            data=self.request.GET or None,
+            queryset=queryset if queryset is not None else self.get_queryset(),
+        )
+        self._apply_widget_styles(filterset.form)
+        return filterset
+
+    def _apply_widget_styles(self, form):
+        """Ensure filter widgets align with the W3.CSS visual language."""
+
+        for field in form.fields.values():
+            widget = field.widget
+            if isinstance(widget, ModelSelect2Widget):
+                # Select2 manages its own styling; only ensure width is 100%.
+                widget.attrs.setdefault("style", "width: 100%")
+                continue
+
+            if isinstance(
+                widget,
+                (
+                    forms.TextInput,
+                    forms.NumberInput,
+                    forms.DateInput,
+                    forms.DateTimeInput,
+                    forms.EmailInput,
+                    forms.TimeInput,
+                    forms.URLInput,
+                ),
+            ):
+                self._merge_widget_classes(widget, "w3-input", "w3-border")
+            elif isinstance(widget, (forms.Select, forms.SelectMultiple)):
+                self._merge_widget_classes(widget, "w3-select", "w3-border")
+            elif isinstance(widget, forms.CheckboxInput):
+                self._merge_widget_classes(widget, "w3-check")
+
+    @staticmethod
+    def _merge_widget_classes(widget, *new_classes):
+        """Append CSS utility classes to a widget without duplicates."""
+
+        existing = widget.attrs.get("class", "").split()
+        for css_class in new_classes:
+            if css_class not in existing:
+                existing.append(css_class)
+        widget.attrs["class"] = " ".join(existing).strip()
+
         return filterset_class(
             data=self.request.GET or None,
             queryset=queryset if queryset is not None else self.get_queryset(),
