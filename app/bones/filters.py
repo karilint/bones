@@ -123,6 +123,11 @@ class FilteredListViewMixin:
                 existing.append(css_class)
         widget.attrs["class"] = " ".join(existing).strip()
 
+        return filterset_class(
+            data=self.request.GET or None,
+            queryset=queryset if queryset is not None else self.get_queryset(),
+        )
+
     def get_queryset(self):  # pragma: no cover - integration point for future views
         queryset = super().get_queryset()
         self.filterset = self.get_filterset(queryset=queryset)

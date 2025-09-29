@@ -23,4 +23,8 @@ __all__ = [
     "DataTypeOptionListView",
     "ProjectConfigListView",
     "DataLogFileListView",
+=======
+
+__all__ = [
+    "DashboardView",
 ]
