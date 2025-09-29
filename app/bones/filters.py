@@ -117,10 +117,16 @@ class FilteredListViewMixin:
     def _merge_widget_classes(widget, *new_classes):
         """Append CSS utility classes to a widget without duplicates."""
 
-        existing = widget.attrs.get("class", "").split()
+        existing_attr = widget.attrs.get("class", "")
+        if isinstance(existing_attr, (list, tuple, set)):
+            existing = [str(value) for value in existing_attr]
+        else:
+            existing = str(existing_attr or "").split()
+
         for css_class in new_classes:
-            if css_class not in existing:
+            if css_class and css_class not in existing:
                 existing.append(css_class)
+
         widget.attrs["class"] = " ".join(existing).strip()
 
         return filterset_class(
