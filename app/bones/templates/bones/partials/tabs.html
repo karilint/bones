@@ -1,0 +1,55 @@
+{#
+    Accessible W3.CSS tab component. ``tabs`` should be an iterable of dictionaries with
+    ``id`` (unique DOM id), ``label``, optional ``icon`` classes, ``active`` boolean, and either
+    ``content`` (safe HTML) or ``template`` (path to include). The caller can also supply
+    ``tablist_label`` for screen readers.
+#}
+{% with tablist_label=tablist_label|default:'Section navigation' %}
+<div class="w3-bar w3-border-bottom" role="tablist" aria-label="{{ tablist_label }}">
+    {% for tab in tabs %}
+        <button
+            class="w3-bar-item w3-button {% if tab.active %}w3-border-bottom w3-border-blue{% endif %}"
+            onclick="openBonesTab(event, '{{ tab.id }}')"
+            role="tab"
+            aria-selected="{% if tab.active %}true{% else %}false{% endif %}"
+            aria-controls="{{ tab.id }}"
+            id="tab-{{ tab.id }}"
+            type="button"
+        >
+            {% if tab.icon %}
+                <span class="fa-fw {{ tab.icon }}" aria-hidden="true"></span>
+            {% endif %}
+            {{ tab.label }}
+        </button>
+    {% endfor %}
+</div>
+{% endwith %}
+<div>
+    {% for tab in tabs %}
+        <section id="{{ tab.id }}" class="bones-tab-panel {% if not tab.active %}w3-hide{% endif %}" role="tabpanel" aria-labelledby="tab-{{ tab.id }}">
+            {% if tab.template %}
+                {% include tab.template %}
+            {% else %}
+                {{ tab.content|safe }}
+            {% endif %}
+        </section>
+    {% endfor %}
+</div>
+<script>
+    function openBonesTab(evt, tabId) {
+        const panels = document.querySelectorAll('.bones-tab-panel');
+        panels.forEach(panel => panel.classList.add('w3-hide'));
+        const tabs = document.querySelectorAll('[role="tab"]');
+        tabs.forEach(tab => {
+            tab.classList.remove('w3-border-bottom', 'w3-border-blue');
+            tab.setAttribute('aria-selected', 'false');
+        });
+        const target = document.getElementById(tabId);
+        const trigger = document.getElementById('tab-' + tabId);
+        if (target && trigger) {
+            target.classList.remove('w3-hide');
+            trigger.classList.add('w3-border-bottom', 'w3-border-blue');
+            trigger.setAttribute('aria-selected', 'true');
+        }
+    }
+</script>
