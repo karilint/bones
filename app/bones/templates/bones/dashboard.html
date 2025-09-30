@@ -1,0 +1,197 @@
+{% extends "bones/base.html" %}
+
+{% block title %}Dashboard | Bones{% endblock %}
+
+{% block main %}
+<section class="w3-section" aria-labelledby="dashboard-metrics">
+    <header class="w3-margin-bottom">
+        <h2 id="dashboard-metrics" class="w3-xxlarge w3-margin-0">Survey overview</h2>
+        <p class="w3-text-grey">Key activity metrics across completed fieldwork.</p>
+    </header>
+    <div class="w3-row-padding">
+        {% if metrics %}
+            {% for metric in metrics %}
+                <article class="w3-quarter w3-margin-bottom">
+                    <div class="w3-card w3-white w3-padding-large w3-round-large">
+                        <div class="w3-xlarge w3-text-indigo w3-margin-bottom">
+                            {% if metric.icon %}
+                                <span class="fa-fw {{ metric.icon }}" aria-hidden="true"></span>
+                            {% endif %}
+                            <span class="w3-hide">{{ metric.label }}</span>
+                        </div>
+                        <p class="w3-xxxlarge w3-margin-0">
+                            {{ metric.count|default:"—" }}
+                        </p>
+                        <p class="w3-text-grey">{{ metric.label }}</p>
+                        <a href="{{ metric.url }}" class="w3-button w3-white w3-border w3-round-large w3-small">
+                            View details
+                            <span class="fa fa-arrow-right" aria-hidden="true"></span>
+                            <span class="w3-hide"> for {{ metric.label }}</span>
+                        </a>
+                    </div>
+                </article>
+            {% endfor %}
+        {% else %}
+            <p class="w3-text-grey">Metrics will appear once data is available.</p>
+        {% endif %}
+    </div>
+</section>
+
+<section class="w3-section" aria-labelledby="dashboard-quick-links">
+    <header class="w3-margin-bottom">
+        <h2 id="dashboard-quick-links" class="w3-xlarge w3-margin-0">Quick links</h2>
+        <p class="w3-text-grey">Jump directly to high-priority follow-up work.</p>
+    </header>
+    <div class="w3-row-padding">
+        {% if quick_links %}
+            {% for link in quick_links %}
+                <article class="w3-half w3-margin-bottom">
+                    <div class="w3-card w3-white w3-padding-large w3-round-large w3-display-container">
+                        <div class="w3-xlarge w3-text-indigo">
+                            {% if link.icon %}
+                                <span class="fa-fw {{ link.icon }}" aria-hidden="true"></span>
+                            {% endif %}
+                            {{ link.label }}
+                        </div>
+                        <p class="w3-text-grey">{{ link.description }}</p>
+                        <p class="w3-large w3-margin-bottom">
+                            <span class="w3-tag w3-indigo w3-round-large w3-margin-right">
+                                {{ link.count|default:"0" }}
+                            </span>
+                            items
+                        </p>
+                        <a href="{{ link.url }}" class="w3-button w3-indigo w3-round-large w3-display-bottomright">
+                            Open
+                            <span class="fa fa-arrow-right" aria-hidden="true"></span>
+                            <span class="w3-hide"> {{ link.label }}</span>
+                        </a>
+                    </div>
+                </article>
+            {% endfor %}
+        {% else %}
+            <p class="w3-text-grey">Quick links will appear once actionable items are available.</p>
+        {% endif %}
+    </div>
+</section>
+
+<section class="w3-section" aria-labelledby="dashboard-recent-activity">
+    <div class="w3-row-padding">
+        <article class="w3-half w3-margin-bottom">
+            <div class="w3-card w3-white w3-round-large">
+                <header class="w3-container w3-blue-grey w3-text-white">
+                    <h3 id="dashboard-recent-activity" class="w3-margin-0">Recent transects</h3>
+                </header>
+                <div class="w3-container w3-padding">
+                    {% if recent_transects %}
+                        <ul class="w3-ul w3-hoverable">
+                            {% for transect in recent_transects %}
+                                <li class="w3-padding-16">
+                                    <div class="w3-large w3-text-indigo">
+                                        <span class="fa fa-route" aria-hidden="true"></span>
+                                        <a href="{{ transect.url }}" class="w3-text-indigo">{{ transect.name }}</a>
+                                    </div>
+                                    <p class="w3-small w3-text-grey w3-margin-0">
+                                        Started {{ transect.start_time|default:"unknown"|date:"SHORT_DATETIME_FORMAT" }}
+                                        &bull; State: {{ transect.state|default:"—" }}
+                                    </p>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="w3-text-grey">No recent transects available.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </article>
+        <article class="w3-half w3-margin-bottom">
+            <div class="w3-card w3-white w3-round-large">
+                <header class="w3-container w3-blue-grey w3-text-white">
+                    <h3 class="w3-margin-0">Recent occurrences</h3>
+                </header>
+                <div class="w3-container w3-padding">
+                    {% if recent_occurrences %}
+                        <ul class="w3-ul w3-hoverable">
+                            {% for occurrence in recent_occurrences %}
+                                <li class="w3-padding-16">
+                                    <div class="w3-large w3-text-indigo">
+                                        <span class="fa fa-frog" aria-hidden="true"></span>
+                                        <a href="{{ occurrence.url }}" class="w3-text-indigo">Occurrence {{ occurrence.occurrence_number }}</a>
+                                    </div>
+                                    <p class="w3-small w3-text-grey w3-margin-0">
+                                        Transect: {{ occurrence.transect_name|default:"—" }}
+                                        &bull; State: {{ occurrence.state|default:"—" }}
+                                    </p>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="w3-text-grey">No recent occurrences found.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </article>
+    </div>
+</section>
+
+<section class="w3-section" aria-labelledby="dashboard-uploads-history">
+    <div class="w3-row-padding">
+        <article class="w3-half w3-margin-bottom">
+            <div class="w3-card w3-white w3-round-large">
+                <header class="w3-container w3-blue-grey w3-text-white">
+                    <h3 id="dashboard-uploads-history" class="w3-margin-0">Recent uploads</h3>
+                </header>
+                <div class="w3-container w3-padding">
+                    {% if recent_uploads %}
+                        <ul class="w3-ul w3-hoverable">
+                            {% for upload in recent_uploads %}
+                                <li class="w3-padding-16">
+                                    <div class="w3-large w3-text-indigo">
+                                        <span class="fa fa-file-arrow-down" aria-hidden="true"></span>
+                                        <a href="{{ upload.url }}" class="w3-text-indigo">Data log {{ upload.id }}</a>
+                                    </div>
+                                    <p class="w3-small w3-text-grey w3-margin-0">
+                                        Uploaded {{ upload.upload_date|default:"unknown"|date:"SHORT_DATETIME_FORMAT" }}
+                                        by {{ upload.uploaded_by|default:"system" }}
+                                    </p>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="w3-text-grey">No data log uploads recorded.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </article>
+        <article class="w3-half w3-margin-bottom">
+            <div class="w3-card w3-white w3-round-large">
+                <header class="w3-container w3-blue-grey w3-text-white">
+                    <h3 class="w3-margin-0">Recent history</h3>
+                </header>
+                <div class="w3-container w3-padding">
+                    {% if recent_history %}
+                        <ul class="w3-ul w3-hoverable">
+                            {% for entry in recent_history %}
+                                <li class="w3-padding-16">
+                                    <div class="w3-large w3-text-indigo">
+                                        <span class="fa fa-clock-rotate-left" aria-hidden="true"></span>
+                                        {{ entry.label }} &mdash; {{ entry.history_type|default:"change" }}
+                                    </div>
+                                    <p class="w3-small w3-text-grey w3-margin-0">
+                                        {{ entry.history_date|default:"unknown"|date:"SHORT_DATETIME_FORMAT" }}
+                                        {% if entry.history_user %}
+                                            by {{ entry.history_user }}
+                                        {% endif %}
+                                    </p>
+                                    <p class="w3-small w3-margin-0">{{ entry.object_repr|default:"Record" }}</p>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="w3-text-grey">History entries will appear after the first tracked change.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </article>
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,45 @@
+{#
+    Generic table partial for list view archetypes. Expect ``table_headers`` as an ordered
+    iterable of dictionaries with ``label`` and optional ``classes``; ``table_rows`` should be
+    an iterable where each row is an iterable of cell dictionaries containing ``value`` and
+    optional ``classes`` or ``url`` (for linked cells).
+#}
+<div class="w3-responsive">
+    <table class="w3-table w3-striped w3-bordered w3-hoverable">
+        {% if table_caption %}
+            <caption class="w3-text-grey w3-left-align">{{ table_caption }}</caption>
+        {% endif %}
+        <thead>
+            <tr>
+                {% for header in table_headers %}
+                    <th class="{{ header.classes|default:'' }}">{{ header.label }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% if table_rows %}
+                {% for row in table_rows %}
+                    <tr>
+                        {% for cell in row %}
+                            <td class="{{ cell.classes|default:'' }}">
+                                {% if cell.url %}
+                                    <a href="{{ cell.url }}" class="w3-text-indigo">
+                                        {{ cell.value }}
+                                    </a>
+                                {% else %}
+                                    {{ cell.value }}
+                                {% endif %}
+                            </td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="{{ table_headers|length }}" class="w3-center w3-text-grey">
+                        No records to display.
+                    </td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
