@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Iterable, List, Mapping, Optional
 
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import DatabaseError
 from django.http import Http404
 from django.shortcuts import get_object_or_404
