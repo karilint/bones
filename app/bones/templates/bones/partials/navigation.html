@@ -8,7 +8,7 @@
     {% if navigation_sections %}
         {% for section in navigation_sections %}
             <div class="w3-dropdown-hover">
-                <a href="{{ section.url|default:'#' }}" class="w3-bar-item w3-button">
+                <a href="{{ section.url|default:'/' }}" class="w3-bar-item w3-button">
                     {% if section.icon %}
                         <span class="fa-fw {{ section.icon }}" aria-hidden="true"></span>
                     {% endif %}
@@ -50,7 +50,7 @@
         </button>
         <div id="bones-mobile-nav" class="w3-bar-block w3-white w3-hide">
             {% for section in navigation_sections %}
-                <a href="{{ section.url|default:'#' }}" class="w3-bar-item w3-button">
+                <a href="{{ section.url|default:'/' }}" class="w3-bar-item w3-button">
                     {% if section.icon %}
                         <span class="fa-fw {{ section.icon }}" aria-hidden="true"></span>
                     {% endif %}

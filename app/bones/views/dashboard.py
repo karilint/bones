@@ -38,6 +38,12 @@ def _safe_reverse(url_name: Optional[str], *, kwargs: Optional[Dict[str, Any]] =
         return None
 
 
+def _fallback_url() -> str:
+    """Return a guaranteed-resolvable URL for dashboard fallbacks."""
+
+    return _safe_reverse("bones:dashboard") or "/"
+
+
 class DashboardView(BonesAuthMixin, TemplateView):
     """Aggregate survey activity metrics for the landing page."""
 
@@ -86,25 +92,25 @@ class DashboardView(BonesAuthMixin, TemplateView):
                 "label": "Completed Transects",
                 "icon": "fa-solid fa-route",
                 "count": completed_transects,
-                "url": _safe_reverse("transects:list") or "#",
+                "url": _safe_reverse("transects:list") or _fallback_url(),
             },
             {
                 "label": "Completed Occurrences",
                 "icon": "fa-solid fa-frog",
                 "count": completed_occurrences,
-                "url": _safe_reverse("occurrences:list") or "#",
+                "url": _safe_reverse("occurrences:list") or _fallback_url(),
             },
             {
                 "label": "Completed Workflows",
                 "icon": "fa-solid fa-diagram-project",
                 "count": completed_workflows,
-                "url": _safe_reverse("workflows:list") or "#",
+                "url": _safe_reverse("workflows:list") or _fallback_url(),
             },
             {
                 "label": "Outstanding Tasks",
                 "icon": "fa-solid fa-clipboard-list",
                 "count": outstanding_tasks,
-                "url": _safe_reverse("workflows:list") or "#",
+                "url": _safe_reverse("workflows:list") or _fallback_url(),
             },
         ]
 
@@ -156,7 +162,7 @@ class DashboardView(BonesAuthMixin, TemplateView):
                     "url": _safe_reverse(
                         "transects:detail", kwargs={"pk": transect.pk}
                     )
-                    or "#",
+                    or _fallback_url(),
                 }
             )
         return results
@@ -182,7 +188,7 @@ class DashboardView(BonesAuthMixin, TemplateView):
                     "url": _safe_reverse(
                         "occurrences:detail", kwargs={"pk": occurrence.pk}
                     )
-                    or "#",
+                    or _fallback_url(),
                 }
             )
         return results
@@ -202,7 +208,7 @@ class DashboardView(BonesAuthMixin, TemplateView):
         for upload in uploads:
             upload["url"] = _safe_reverse(
                 "logs:detail", kwargs={"pk": upload["id"]}
-            ) or "#"
+            ) or _fallback_url()
         return uploads
 
     def _fetch_recent_history(self, limit: int = 5) -> List[Dict[str, Any]]:
@@ -272,14 +278,14 @@ class DashboardView(BonesAuthMixin, TemplateView):
                 "label": "Review Pending Audits",
                 "description": "Transects awaiting post-survey audit.",
                 "icon": "fa-solid fa-clipboard-check",
-                "url": _safe_reverse("transects:list") or "#",
+                "url": _safe_reverse("transects:list") or _fallback_url(),
                 "count": pending_audits,
             },
             {
                 "label": "Browse History Timeline",
                 "description": "Inspect recent changes across survey data.",
                 "icon": "fa-solid fa-clock-rotate-left",
-                "url": _safe_reverse("history:index") or "#",
+                "url": _safe_reverse("history:index") or _fallback_url(),
                 "count": history_count,
             },
         ]

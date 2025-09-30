@@ -20,8 +20,23 @@ class NavigationContextTests(SimpleTestCase):
                 "label": "Example",
                 "icon": "fa-solid fa-circle-info",
                 "fallback_url": "/placeholder/",
-                "children": [{"label": "Child", "fallback_url": "#"}],
+                "children": [{"label": "Child", "fallback_url": "/child/"}],
             }
         )
         self.assertEqual(link["url"], "/placeholder/")
-        self.assertEqual(link["children"][0]["url"], "#")
+        self.assertEqual(link["children"][0]["url"], "/child/")
+
+    def test_materialise_link_uses_descendant_when_no_direct_fallback(self):
+        link = _materialise_link(
+            {
+                "label": "Parent",
+                "children": [
+                    {
+                        "label": "Child",
+                        "url": "/child/",
+                    }
+                ],
+            }
+        )
+
+        self.assertEqual(link["url"], "/child/")
