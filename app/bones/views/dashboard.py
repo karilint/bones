@@ -52,6 +52,12 @@ def _fallback_url() -> str:
     return _safe_reverse("bones:dashboard") or "/"
 
 
+def _fallback_url() -> str:
+    """Return a guaranteed-resolvable URL for dashboard fallbacks."""
+
+    return _safe_reverse("bones:dashboard") or "/"
+
+
 class DashboardView(BonesAuthMixin, TemplateView):
     """Aggregate survey activity metrics for the landing page."""
 
