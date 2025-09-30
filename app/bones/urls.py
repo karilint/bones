@@ -1,7 +1,9 @@
 from django.urls import include, path
 
 from .views import (
+    CompletedOccurrenceDetailView,
     CompletedOccurrenceListView,
+    CompletedTransectDetailView,
     CompletedTransectListView,
     CompletedWorkflowListView,
     DashboardView,
@@ -22,6 +24,7 @@ app_name = "bones"
 transect_patterns = (
     [
         path("", CompletedTransectListView.as_view(), name="list"),
+        path("<int:pk>/", CompletedTransectDetailView.as_view(), name="detail"),
     ],
     "transects",
 )
@@ -29,6 +32,7 @@ transect_patterns = (
 occurrence_patterns = (
     [
         path("", CompletedOccurrenceListView.as_view(), name="list"),
+        path("<int:pk>/", CompletedOccurrenceDetailView.as_view(), name="detail"),
     ],
     "occurrences",
 )

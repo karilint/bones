@@ -17,6 +17,10 @@ from .lists import (
     QuestionListView,
     TemplateTransectListView,
 )
+from .master_detail import (
+    CompletedOccurrenceDetailView,
+    CompletedTransectDetailView,
+)
 
 __all__ = [
     "DashboardView",
@@ -25,6 +29,8 @@ __all__ = [
     "CompletedWorkflowListView",
     "TemplateTransectListView",
     "QuestionListView",
+    "CompletedTransectDetailView",
+    "CompletedOccurrenceDetailView",
     "DataTypeListView",
     "DataTypeOptionListView",
     "ProjectConfigListView",

@@ -9,7 +9,7 @@ class CompletedResponseQuerySet(models.QuerySet):
 
     def with_questions(self):
         """Select related question metadata to avoid per-row lookups."""
-        return self.select_related("question")
+        return self.select_related("question", "workflow", "workflow__template_workflow")
 
 
 class CompletedResponseManager(models.Manager.from_queryset(CompletedResponseQuerySet)):
