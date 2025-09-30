@@ -13,6 +13,7 @@ from django.views.generic import DetailView, TemplateView
 
 from ..models import CompletedOccurrence, CompletedTransect, CompletedWorkflow, Question
 from .detail import format_value, safe_reverse
+from .mixins import BonesAuthMixin
 
 
 @dataclass
@@ -25,10 +26,11 @@ class HistoryLink:
     url: Optional[str]
 
 
-class HistoryIndexView(LoginRequiredMixin, TemplateView):
+class HistoryIndexView(BonesAuthMixin, TemplateView):
     """Landing page summarising available history timelines."""
 
     template_name = "bones/history/index.html"
+    permission_required: tuple[str, ...] = ()
 
     def get_history_sections(self) -> List[HistoryLink]:
         """Return the primary history sections surfaced on the index."""
@@ -80,7 +82,7 @@ class HistoryIndexView(LoginRequiredMixin, TemplateView):
         return context
 
 
-class HistoryBaseMixin(LoginRequiredMixin):
+class HistoryBaseMixin(BonesAuthMixin):
     """Common helpers for history timelines and entry detail pages."""
 
     model = None
@@ -112,6 +114,15 @@ class HistoryBaseMixin(LoginRequiredMixin):
         if not self.model:
             raise AssertionError("History views must define a model")
         return self.model.history.select_related("history_user").order_by("-history_date")
+
+    def get_permission_required(self):  # type: ignore[override]
+        perms = super().get_permission_required()
+        if perms:
+            return perms
+        if getattr(self, "model", None):
+            meta = self.model._meta  # type: ignore[attr-defined]
+            return (f"{meta.app_label}.view_{meta.model_name}",)
+        return ()
 
     def _limit_entries(self, entries: Iterable[Any]) -> List[Any]:
         if self.max_entries:

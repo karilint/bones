@@ -33,6 +33,7 @@ from ..models import (
     Question,
     TemplateTransect,
 )
+from .mixins import BonesAuthMixin
 
 
 EM_DASH = "\u2014"
@@ -80,7 +81,7 @@ def format_value(value):
     return value
 
 
-class BonesListView(FilteredListViewMixin, ListView):
+class BonesListView(BonesAuthMixin, FilteredListViewMixin, ListView):
     """Base class for list archetypes with filter + table support."""
 
     paginate_by = 25
@@ -135,6 +136,15 @@ class BonesListView(FilteredListViewMixin, ListView):
             '<div class="w3-bar w3-small w3-nowrap">{}</div>',
             format_html_join("", "{}", ((button,) for button in buttons)),
         )
+
+    def get_permission_required(self):  # type: ignore[override]
+        perms = super().get_permission_required()
+        if perms:
+            return perms
+        if getattr(self, "model", None):
+            meta = self.model._meta  # type: ignore[attr-defined]
+            return (f"{meta.app_label}.view_{meta.model_name}",)
+        return ()
 
     @staticmethod
     def _render_action_button(url: str | None, label: str, icon: str) -> str:

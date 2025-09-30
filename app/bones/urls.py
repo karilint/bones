@@ -1,4 +1,5 @@
 from django.urls import include, path
+from django.views.generic import RedirectView
 
 from .views import (
     CompletedOccurrenceDetailView,
@@ -138,7 +139,8 @@ history_patterns = (
 )
 
 urlpatterns = [
-    path("", DashboardView.as_view(), name="dashboard"),
+    path("", RedirectView.as_view(pattern_name="dashboard", permanent=False)),
+    path("dashboard/", DashboardView.as_view(), name="dashboard"),
     path("transects/", include(transect_patterns)),
     path("occurrences/", include(occurrence_patterns)),
     path("workflows/", include(workflow_patterns)),
@@ -146,4 +148,5 @@ urlpatterns = [
     path("reference/", include(reference_patterns)),
     path("logs/", include(log_patterns)),
     path("history/", include(history_patterns)),
+    path("select2/", include("django_select2.urls")),
 ]

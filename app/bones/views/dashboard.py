@@ -17,6 +17,7 @@ from ..models import (
     DataLogFile,
     Question,
 )
+from .mixins import BonesAuthMixin
 
 
 def _safe_reverse(url_name: Optional[str], *, kwargs: Optional[Dict[str, Any]] = None) -> Optional[str]:
@@ -37,10 +38,11 @@ def _safe_reverse(url_name: Optional[str], *, kwargs: Optional[Dict[str, Any]] =
         return None
 
 
-class DashboardView(TemplateView):
+class DashboardView(BonesAuthMixin, TemplateView):
     """Aggregate survey activity metrics for the landing page."""
 
     template_name = "bones/dashboard.html"
+    permission_required: tuple[str, ...] = ()
 
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         context = super().get_context_data(**kwargs)

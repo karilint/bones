@@ -16,6 +16,7 @@ from django_select2.forms import Select2Widget
 
 from ..forms import DataLogFileForm, DataTypeForm, ProjectConfigForm, QuestionForm
 from ..models import DataLogFile, DataType, ProjectConfig, Question
+from .mixins import BonesAuthMixin
 
 EM_DASH = "\u2014"
 
@@ -70,7 +71,7 @@ def format_pre(value: Any) -> str:
     return format_html('<pre class="w3-code w3-small w3-round w3-light-grey">{}</pre>', value)
 
 
-class BonesDetailView(UpdateView):
+class BonesDetailView(BonesAuthMixin, UpdateView):
     """Base class for detail-oriented pages with inline editing."""
 
     page_icon: str = ""
@@ -120,6 +121,15 @@ class BonesDetailView(UpdateView):
                     existing.append(css_class)
             widget.attrs["class"] = " ".join(existing).strip()
         return form
+
+    def get_permission_required(self):  # type: ignore[override]
+        perms = super().get_permission_required()
+        if perms:
+            return perms
+        if getattr(self, "model", None):
+            meta = self.model._meta  # type: ignore[attr-defined]
+            return (f"{meta.app_label}.change_{meta.model_name}",)
+        return ()
 
     def get_detail_sections(self) -> Iterable[Mapping[str, Any]]:
         """Return metadata sections for the current object."""

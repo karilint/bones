@@ -15,9 +15,10 @@ from .detail import (
     safe_reverse,
 )
 from ..models import CompletedOccurrence, CompletedTransect
+from .mixins import BonesAuthMixin
 
 
-class BonesMasterDetailView(DetailView):
+class BonesMasterDetailView(BonesAuthMixin, DetailView):
     """Base class for master-detail style pages with tab navigation."""
 
     page_icon: str = ""
@@ -96,6 +97,15 @@ class BonesMasterDetailView(DetailView):
         if manager is None:
             return []
         return list(manager)
+
+    def get_permission_required(self):  # type: ignore[override]
+        perms = super().get_permission_required()
+        if perms:
+            return perms
+        if getattr(self, "model", None):
+            meta = self.model._meta  # type: ignore[attr-defined]
+            return (f"{meta.app_label}.view_{meta.model_name}",)
+        return ()
 
 
 class CompletedTransectDetailView(BonesMasterDetailView):
