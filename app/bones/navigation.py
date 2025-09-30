@@ -2,12 +2,13 @@
 
 This module centralises the primary navigation structure so templates and
 views can rely on a single source of truth. The context processor resolves
-URL names lazily and falls back to ``#`` when routes have not been wired yet,
-which keeps the interface functional during incremental development.
+URL names lazily and falls back to sensible routes (such as child links or the
+dashboard) when targets have not been wired yet, which keeps the interface
+functional during incremental development without exposing broken ``#`` links.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Dict, Iterable, List, Mapping, Optional
 
 from django.urls import NoReverseMatch, reverse
 
@@ -20,7 +21,8 @@ def _safe_reverse(url_name: Optional[str], *, kwargs: Optional[Mapping[str, Any]
 
     The navigation plan references routes that will come online over the course
     of the coding plan. Swallow ``NoReverseMatch`` errors so placeholder links
-    can gracefully fall back to ``#`` until their corresponding views exist.
+    can gracefully fall back to other working URLs until their corresponding
+    views exist.
     """
     if not url_name:
         return None
@@ -33,12 +35,29 @@ def _safe_reverse(url_name: Optional[str], *, kwargs: Optional[Mapping[str, Any]
 
 def _materialise_link(link: NavigationLink) -> Dict[str, Any]:
     """Return a link dictionary augmented with a resolved URL."""
+
+    children = [_materialise_link(child) for child in link.get("children", [])]
     resolved_url = link.get("url") or _safe_reverse(link.get("url_name"), kwargs=link.get("kwargs"))
+
+    fallback_sources: Iterable[Optional[str]] = (
+        link.get("fallback_url"),
+        _safe_reverse(link.get("fallback_url_name"), kwargs=link.get("fallback_kwargs")),
+        *[child.get("url") for child in children if child.get("url")],
+        "/",
+    )
+
+    url = resolved_url
+    if not url:
+        for candidate in fallback_sources:
+            if candidate:
+                url = candidate
+                break
+
     return {
         "label": link.get("label", ""),
         "icon": link.get("icon"),
-        "url": resolved_url or link.get("fallback_url", "#"),
-        "children": [_materialise_link(child) for child in link.get("children", [])],
+        "url": url,
+        "children": children,
     }
 
 
@@ -49,7 +68,11 @@ NAVIGATION_SECTIONS: List[NavigationLink] = [
         "url_name": "dashboard",
         "children": [
             {"label": "Overview", "url_name": "dashboard"},
-            {"label": "Recent Activity", "url_name": "history:dashboard", "fallback_url": "#"},
+            {
+                "label": "Recent Activity",
+                "url_name": "history:dashboard",
+                "fallback_url_name": "history:index",
+            },
         ],
     },
     {
@@ -58,7 +81,11 @@ NAVIGATION_SECTIONS: List[NavigationLink] = [
         "url_name": "transects:list",
         "children": [
             {"label": "Completed Transects", "url_name": "transects:list"},
-            {"label": "Transect Detail", "url_name": "transects:detail", "fallback_url": "#"},
+            {
+                "label": "Transect Detail",
+                "url_name": "transects:detail",
+                "fallback_url_name": "transects:list",
+            },
             {"label": "Transect History", "url_name": "history:transects"},
         ],
     },
@@ -68,7 +95,11 @@ NAVIGATION_SECTIONS: List[NavigationLink] = [
         "url_name": "occurrences:list",
         "children": [
             {"label": "Completed Occurrences", "url_name": "occurrences:list"},
-            {"label": "Occurrence Detail", "url_name": "occurrences:detail", "fallback_url": "#"},
+            {
+                "label": "Occurrence Detail",
+                "url_name": "occurrences:detail",
+                "fallback_url_name": "occurrences:list",
+            },
             {"label": "Occurrence History", "url_name": "history:occurrences"},
         ],
     },
@@ -78,7 +109,11 @@ NAVIGATION_SECTIONS: List[NavigationLink] = [
         "url_name": "workflows:list",
         "children": [
             {"label": "Workflow Runs", "url_name": "workflows:list"},
-            {"label": "Workflow Detail", "url_name": "workflows:detail", "fallback_url": "#"},
+            {
+                "label": "Workflow Detail",
+                "url_name": "workflows:detail",
+                "fallback_url_name": "workflows:list",
+            },
             {"label": "Workflow History", "url_name": "history:workflows"},
         ],
     },
@@ -88,7 +123,11 @@ NAVIGATION_SECTIONS: List[NavigationLink] = [
         "url_name": "templates:list",
         "children": [
             {"label": "Template Transects", "url_name": "templates:list"},
-            {"label": "Template Detail", "url_name": "templates:detail", "fallback_url": "#"},
+            {
+                "label": "Template Detail",
+                "url_name": "templates:detail",
+                "fallback_url_name": "templates:list",
+            },
             {"label": "Template Questions", "url_name": "templates:questions"},
         ],
     },
@@ -108,7 +147,11 @@ NAVIGATION_SECTIONS: List[NavigationLink] = [
         "url_name": "logs:list",
         "children": [
             {"label": "Uploaded Logs", "url_name": "logs:list"},
-            {"label": "Log Detail", "url_name": "logs:detail", "fallback_url": "#"},
+            {
+                "label": "Log Detail",
+                "url_name": "logs:detail",
+                "fallback_url_name": "logs:list",
+            },
         ],
     },
     {
