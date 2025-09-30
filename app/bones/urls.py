@@ -139,7 +139,13 @@ history_patterns = (
 )
 
 urlpatterns = [
-    path("", RedirectView.as_view(pattern_name="dashboard", permanent=False)),
+    path(
+        "",
+        RedirectView.as_view(
+            pattern_name=f"{app_name}:dashboard",
+            permanent=False,
+        ),
+    ),
     path("dashboard/", DashboardView.as_view(), name="dashboard"),
     path("transects/", include(transect_patterns)),
     path("occurrences/", include(occurrence_patterns)),
