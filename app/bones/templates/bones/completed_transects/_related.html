@@ -1,0 +1,21 @@
+{% load i18n %}
+<section class="w3-section">
+    <header class="w3-margin-bottom">
+        <h3 class="w3-large w3-margin-0">
+            <span class="fa-fw fa-solid fa-frog" aria-hidden="true"></span>
+            {% trans "Occurrences" %}
+        </h3>
+        <p class="w3-text-grey">{% trans "Occurrences recorded during this transect." %}</p>
+    </header>
+    {% include "bones/partials/table.html" with table_headers=transect_occurrence_headers table_rows=transect_occurrence_rows table_caption=_('Transect occurrences') %}
+</section>
+<section class="w3-section">
+    <header class="w3-margin-bottom">
+        <h3 class="w3-large w3-margin-0">
+            <span class="fa-fw fa-solid fa-location-dot" aria-hidden="true"></span>
+            {% trans "Track points" %}
+        </h3>
+        <p class="w3-text-grey">{% trans "GPS checkpoints recorded throughout the transect." %}</p>
+    </header>
+    {% include "bones/partials/table.html" with table_headers=transect_track_headers table_rows=transect_track_rows table_caption=_('Transect track points') %}
+</section>
