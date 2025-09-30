@@ -1,0 +1,60 @@
+{% extends "bones/base.html" %}
+{% load i18n %}
+
+{% block content %}
+<main class="w3-container w3-padding">
+    {% include "bones/partials/breadcrumbs.html" %}
+    {% include "bones/partials/detail_header.html" %}
+    <section class="w3-section">
+        <div class="w3-card w3-round w3-white w3-padding">
+            <h3 class="w3-large w3-margin-top w3-margin-bottom">{{ record }}</h3>
+            {% if object_detail_url %}
+                <a href="{{ object_detail_url }}" class="w3-button w3-round w3-blue">
+                    {% blocktrans with label=entity_label %}View {{ label }} detail{% endblocktrans %}
+                </a>
+            {% endif %}
+        </div>
+    </section>
+    <section class="w3-section">
+        {% if history_error %}
+            <div class="w3-panel w3-pale-red w3-border w3-border-red">
+                <p class="w3-margin-0">{% trans "Historical entries are unavailable right now." %}</p>
+            </div>
+        {% elif history_entries %}
+            <ul class="w3-ul w3-card-4" aria-live="polite">
+                {% for item in history_entries %}
+                    {% with entry=item.record %}
+                        <li class="w3-padding-large">
+                            <div class="w3-small w3-text-grey">
+                                {{ entry.history_date|date:"DATETIME_FORMAT" }}
+                            </div>
+                            <div class="w3-margin-top w3-margin-bottom">
+                                {% if entry.history_type == '+' %}
+                                    <span class="w3-tag w3-round w3-green">{% trans "Created" %}</span>
+                                {% elif entry.history_type == '-' %}
+                                    <span class="w3-tag w3-round w3-red">{% trans "Deleted" %}</span>
+                                {% else %}
+                                    <span class="w3-tag w3-round w3-blue">{% trans "Updated" %}</span>
+                                {% endif %}
+                                {% if entry.history_user %}
+                                    <span class="w3-margin-left">{% blocktrans with user=entry.history_user %}by {{ user }}{% endblocktrans %}</span>
+                                {% endif %}
+                            </div>
+                            {% if item.detail_url %}
+                                <a href="{{ item.detail_url }}" class="w3-button w3-round w3-border w3-border-blue w3-text-blue">
+                                    {% trans "View change" %}
+                                </a>
+                            {% endif %}
+                            {% if entry.history_change_reason %}
+                                <p class="w3-small w3-text-grey w3-margin-top">{{ entry.history_change_reason }}</p>
+                            {% endif %}
+                        </li>
+                    {% endwith %}
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="w3-text-grey">{% blocktrans with label=entity_label %}No history recorded for this {{ label }} yet.{% endblocktrans %}</p>
+        {% endif %}
+    </section>
+</main>
+{% endblock %}

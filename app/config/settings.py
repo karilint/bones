@@ -51,10 +51,13 @@ SECRET_KEY = get_var('SECRET_KEY', 'development_key')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = bool(int(get_var('DEBUG', 0)))
 
-ALLOWED_HOSTS = []
+DEFAULT_ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0']
+ALLOWED_HOSTS = DEFAULT_ALLOWED_HOSTS.copy()
 ALLOWED_HOSTS_ENV = get_var('ALLOWED_HOSTS')
 if ALLOWED_HOSTS_ENV:
-    ALLOWED_HOSTS.extend(ALLOWED_HOSTS_ENV.split(','))
+    for host in (value.strip() for value in ALLOWED_HOSTS_ENV.split(',')):
+        if host and host not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(host)
 
 CSRF_TRUSTED_ORIGINS = []
 TRUSTED_ORIGINS_ENV = get_var('TRUSTED_ORIGINS')
@@ -72,6 +75,9 @@ INSTALLED_APPS = [
     'django.contrib.sites',
     'django.contrib.staticfiles',
     'bones',
+    'django_select2',
+    'simple_history',
+    'django_filters',
     #    'allauth',
     #    'allauth.account',
     #    'allauth.socialaccount',
@@ -86,6 +92,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'simple_history.middleware.HistoryRequestMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -103,6 +110,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'bones.navigation.navigation_context',
             ],
         },
     },

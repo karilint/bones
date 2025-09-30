@@ -1,0 +1,19 @@
+{# Render breadcrumb navigation. Expects breadcrumbs iterable of {label, url}. #}
+{% if breadcrumbs %}
+    <nav class="w3-margin-top w3-margin-bottom" aria-label="Breadcrumb">
+        <ul class="w3-ul w3-small w3-border-0 w3-padding-0 w3-margin-0 w3-text-grey">
+            {% for crumb in breadcrumbs %}
+                <li class="w3-display-inline-block">
+                    {% if not forloop.first %}
+                        <span aria-hidden="true" class="w3-margin-right w3-margin-left">&rsaquo;</span>
+                    {% endif %}
+                    {% if crumb.url %}
+                        <a href="{{ crumb.url }}" class="w3-text-blue">{{ crumb.label }}</a>
+                    {% else %}
+                        <span>{{ crumb.label }}</span>
+                    {% endif %}
+                </li>
+            {% endfor %}
+        </ul>
+    </nav>
+{% endif %}

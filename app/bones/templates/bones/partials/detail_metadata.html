@@ -1,0 +1,28 @@
+{# Display metadata sections for detail pages. Expects detail_sections list. #}
+{% for section in detail_sections %}
+    <article class="w3-card w3-white w3-margin-bottom">
+        <header class="w3-container w3-padding">
+            <h3 class="w3-margin-0 w3-large">
+                {% if section.icon %}
+                    <span class="fa-fw {{ section.icon }}" aria-hidden="true"></span>
+                {% endif %}
+                {{ section.title }}
+            </h3>
+        </header>
+        <div class="w3-container w3-padding">
+            {% if section.description %}
+                <p class="w3-text-grey">{{ section.description }}</p>
+            {% endif %}
+            <dl class="w3-margin-0">
+                {% for item in section.items %}
+                    <div class="w3-row w3-margin-bottom">
+                        <dt class="w3-col s12 m4 l4 w3-text-grey">{{ item.label }}</dt>
+                        <dd class="w3-col s12 m8 l8 w3-margin-0">{{ item.value|safe }}</dd>
+                    </div>
+                {% endfor %}
+            </dl>
+        </div>
+    </article>
+{% empty %}
+    <p class="w3-text-grey">No metadata available.</p>
+{% endfor %}

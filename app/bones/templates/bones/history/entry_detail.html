@@ -1,0 +1,82 @@
+{% extends "bones/base.html" %}
+{% load i18n %}
+
+{% block content %}
+<main class="w3-container w3-padding">
+    {% include "bones/partials/breadcrumbs.html" %}
+    {% include "bones/partials/detail_header.html" %}
+    <section class="w3-section">
+        <div class="w3-card w3-round w3-white w3-padding">
+            <h3 class="w3-large w3-margin-top w3-margin-bottom">{{ record }}</h3>
+            <p class="w3-small w3-text-grey">{{ history_entry.history_date|date:"DATETIME_FORMAT" }}</p>
+            <p class="w3-small">
+                {% if history_entry.history_type == '+' %}
+                    <span class="w3-tag w3-round w3-green">{% trans "Created" %}</span>
+                {% elif history_entry.history_type == '-' %}
+                    <span class="w3-tag w3-round w3-red">{% trans "Deleted" %}</span>
+                {% else %}
+                    <span class="w3-tag w3-round w3-blue">{% trans "Updated" %}</span>
+                {% endif %}
+                {% if history_entry.history_user %}
+                    <span class="w3-margin-left">{% blocktrans with user=history_entry.history_user %}by {{ user }}{% endblocktrans %}</span>
+                {% endif %}
+            </p>
+            {% if history_entry.history_change_reason %}
+                <p class="w3-small w3-text-grey">{{ history_entry.history_change_reason }}</p>
+            {% endif %}
+            <div class="w3-margin-top">
+                {% if previous_entry_url %}
+                    <a href="{{ previous_entry_url }}" class="w3-button w3-round w3-border w3-border-blue w3-text-blue w3-margin-right">
+                        {% trans "Previous change" %}
+                    </a>
+                {% endif %}
+                {% if next_entry_url %}
+                    <a href="{{ next_entry_url }}" class="w3-button w3-round w3-border w3-border-blue w3-text-blue">
+                        {% trans "Next change" %}
+                    </a>
+                {% endif %}
+                {% if record_history_url %}
+                    <a href="{{ record_history_url }}" class="w3-button w3-round w3-margin-left w3-light-grey">
+                        {% trans "Back to timeline" %}
+                    </a>
+                {% endif %}
+                {% if list_url %}
+                    <a href="{{ list_url }}" class="w3-button w3-round w3-margin-left w3-light-grey">
+                        {% trans "All history" %}
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+    <section class="w3-section">
+        {% if history_diff_error %}
+            <div class="w3-panel w3-pale-red w3-border w3-border-red">
+                <p class="w3-margin-0">{% trans "Unable to calculate field changes for this revision." %}</p>
+            </div>
+        {% elif history_changes %}
+            <div class="w3-responsive">
+                <table class="w3-table w3-bordered w3-striped">
+                    <thead>
+                        <tr>
+                            <th scope="col">{% trans "Field" %}</th>
+                            <th scope="col">{% trans "Previous" %}</th>
+                            <th scope="col">{% trans "Current" %}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for change in history_changes %}
+                            <tr>
+                                <th scope="row">{{ change.label }}</th>
+                                <td>{{ change.old }}</td>
+                                <td>{{ change.new }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="w3-text-grey">{% trans "No field level changes recorded for this revision." %}</p>
+        {% endif %}
+    </section>
+</main>
+{% endblock %}
