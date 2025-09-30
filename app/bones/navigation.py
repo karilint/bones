@@ -89,7 +89,7 @@ NAVIGATION_SECTIONS: List[NavigationLink] = [
         "children": [
             {"label": "Template Transects", "url_name": "templates:list"},
             {"label": "Template Detail", "url_name": "templates:detail", "fallback_url": "#"},
-            {"label": "Template Questions", "url_name": "templates:questions", "fallback_url": "#"},
+            {"label": "Template Questions", "url_name": "templates:questions"},
         ],
     },
     {
@@ -98,8 +98,8 @@ NAVIGATION_SECTIONS: List[NavigationLink] = [
         "url_name": "reference:list",
         "children": [
             {"label": "Data Types", "url_name": "reference:data_types"},
-            {"label": "Data Type Options", "url_name": "reference:data_type_options", "fallback_url": "#"},
-            {"label": "Project Config", "url_name": "reference:project_config", "fallback_url": "#"},
+            {"label": "Data Type Options", "url_name": "reference:data_type_options"},
+            {"label": "Project Config", "url_name": "reference:project_config"},
         ],
     },
     {

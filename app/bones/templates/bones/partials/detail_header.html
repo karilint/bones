@@ -1,0 +1,12 @@
+{# Shared header for detail archetypes. Requires page_title, page_icon, intro_text. #}
+<header class="w3-margin-bottom">
+    <h2 class="w3-xxlarge w3-margin-bottom">
+        {% if page_icon %}
+            <span class="fa-fw {{ page_icon }}" aria-hidden="true"></span>
+        {% endif %}
+        {{ page_title }}
+    </h2>
+    {% if intro_text %}
+        <p class="w3-text-grey">{{ intro_text }}</p>
+    {% endif %}
+</header>

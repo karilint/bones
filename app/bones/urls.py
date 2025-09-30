@@ -5,10 +5,14 @@ from .views import (
     CompletedTransectListView,
     CompletedWorkflowListView,
     DashboardView,
+    DataLogFileDetailView,
     DataLogFileListView,
+    DataTypeDetailView,
     DataTypeListView,
     DataTypeOptionListView,
+    ProjectConfigDetailView,
     ProjectConfigListView,
+    QuestionDetailView,
     QuestionListView,
     TemplateTransectListView,
 )
@@ -40,6 +44,7 @@ template_patterns = (
     [
         path("", TemplateTransectListView.as_view(), name="list"),
         path("questions/", QuestionListView.as_view(), name="questions"),
+        path("questions/<str:pk>/", QuestionDetailView.as_view(), name="question_detail"),
     ],
     "templates",
 )
@@ -48,8 +53,10 @@ reference_patterns = (
     [
         path("", DataTypeListView.as_view(), name="list"),
         path("data-types/", DataTypeListView.as_view(), name="data_types"),
+        path("data-types/<str:pk>/", DataTypeDetailView.as_view(), name="data_type_detail"),
         path("data-type-options/", DataTypeOptionListView.as_view(), name="data_type_options"),
         path("project-configs/", ProjectConfigListView.as_view(), name="project_config"),
+        path("project-configs/<int:pk>/", ProjectConfigDetailView.as_view(), name="project_config_detail"),
     ],
     "reference",
 )
@@ -57,6 +64,7 @@ reference_patterns = (
 log_patterns = (
     [
         path("", DataLogFileListView.as_view(), name="list"),
+        path("<int:pk>/", DataLogFileDetailView.as_view(), name="detail"),
     ],
     "logs",
 )
