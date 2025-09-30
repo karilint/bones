@@ -40,25 +40,25 @@ class HistoryIndexView(BonesAuthMixin, TemplateView):
                 label=_("Transects"),
                 description=_("Review audit history captured for completed transects."),
                 icon="fa-solid fa-route",
-                url=safe_reverse("history:transects"),
+                url=safe_reverse("bones:history:transects"),
             ),
             HistoryLink(
                 label=_("Occurrences"),
                 description=_("Inspect changes made to completed occurrences."),
                 icon="fa-solid fa-frog",
-                url=safe_reverse("history:occurrences"),
+                url=safe_reverse("bones:history:occurrences"),
             ),
             HistoryLink(
                 label=_("Workflows"),
                 description=_("Track workflow status changes across completed runs."),
                 icon="fa-solid fa-diagram-project",
-                url=safe_reverse("history:workflows"),
+                url=safe_reverse("bones:history:workflows"),
             ),
             HistoryLink(
                 label=_("Questions"),
                 description=_("Audit updates to survey questions and configuration."),
                 icon="fa-solid fa-circle-question",
-                url=safe_reverse("history:questions"),
+                url=safe_reverse("bones:history:questions"),
             ),
         ]
 
@@ -179,7 +179,7 @@ class HistoryBaseMixin(BonesAuthMixin):
     def build_breadcrumbs(self) -> List[dict[str, Optional[str]]]:
         return [
             {"label": _("Dashboard"), "url": safe_reverse("dashboard")},
-            {"label": _("History"), "url": safe_reverse("history:index")},
+            {"label": _("History"), "url": safe_reverse("bones:history:index")},
             {"label": self.entity_plural_label, "url": safe_reverse(self.list_route_name)},
         ]
 

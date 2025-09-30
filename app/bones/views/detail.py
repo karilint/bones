@@ -22,17 +22,28 @@ EM_DASH = "\u2014"
 
 
 def safe_reverse(name: str | None, *, kwargs: Mapping[str, Any] | None = None) -> str | None:
-    """Resolve a URL name if it exists, otherwise return ``None``."""
+    """Resolve a URL name if it exists, otherwise return ``None``.
+
+    Callers can provide either fully qualified names (``bones:app:view``) or
+    the legacy shorthand without the app namespace. The helper attempts both so
+    templates remain stable while URL wiring is refined.
+    """
 
     if not name:
         return None
 
-    try:
-        if kwargs:
-            return reverse(name, kwargs=kwargs)
-        return reverse(name)
-    except NoReverseMatch:
-        return None
+    candidate_names = [name]
+    if not name.startswith("bones:"):
+        candidate_names.append(f"bones:{name}")
+
+    for candidate in candidate_names:
+        try:
+            if kwargs:
+                return reverse(candidate, kwargs=kwargs)
+            return reverse(candidate)
+        except NoReverseMatch:
+            continue
+    return None
 
 
 def format_value(value: Any) -> str:

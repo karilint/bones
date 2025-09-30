@@ -118,8 +118,8 @@ class CompletedTransectDetailView(BonesMasterDetailView):
     intro_text = _(
         "Inspect a completed transect, review its captured occurrences, track points, and audit history."
     )
-    list_route_name = "transects:list"
-    history_route_name = "history:transect_record"
+    list_route_name = "bones:transects:list"
+    history_route_name = "bones:history:transect_record"
     breadcrumb_list_label = _("Completed transects")
     tablist_label = _("Transect detail navigation")
 
@@ -139,12 +139,12 @@ class CompletedTransectDetailView(BonesMasterDetailView):
             {
                 "label": _("Export responses"),
                 "icon": "fa-solid fa-file-export",
-                "url": safe_reverse("transects:export_responses", kwargs={"pk": obj.pk}),
+                "url": safe_reverse("bones:transects:export_responses", kwargs={"pk": obj.pk}),
             },
             {
                 "label": _("Download GPS track"),
                 "icon": "fa-solid fa-download",
-                "url": safe_reverse("transects:download_track", kwargs={"pk": obj.pk}),
+                "url": safe_reverse("bones:transects:download_track", kwargs={"pk": obj.pk}),
             },
         ]
 
@@ -342,8 +342,8 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
     intro_text = _(
         "Review a recorded occurrence, browse captured responses, linked workflows, and audit events."
     )
-    list_route_name = "occurrences:list"
-    history_route_name = "history:occurrence_record"
+    list_route_name = "bones:occurrences:list"
+    history_route_name = "bones:history:occurrence_record"
     breadcrumb_list_label = _("Completed occurrences")
     tablist_label = _("Occurrence detail navigation")
 
