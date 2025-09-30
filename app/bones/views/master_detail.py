@@ -109,7 +109,7 @@ class CompletedTransectDetailView(BonesMasterDetailView):
         "Inspect a completed transect, review its captured occurrences, track points, and audit history."
     )
     list_route_name = "transects:list"
-    history_route_name = "history:transects"
+    history_route_name = "history:transect_record"
     breadcrumb_list_label = _("Completed transects")
     tablist_label = _("Transect detail navigation")
 
@@ -333,7 +333,7 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
         "Review a recorded occurrence, browse captured responses, linked workflows, and audit events."
     )
     list_route_name = "occurrences:list"
-    history_route_name = "history:occurrences"
+    history_route_name = "history:occurrence_record"
     breadcrumb_list_label = _("Completed occurrences")
     tablist_label = _("Occurrence detail navigation")
 

@@ -2,9 +2,18 @@ from django.urls import include, path
 
 from .views import (
     CompletedOccurrenceDetailView,
+    CompletedOccurrenceHistoryEntryView,
+    CompletedOccurrenceHistoryListView,
+    CompletedOccurrenceHistoryRecordView,
     CompletedOccurrenceListView,
     CompletedTransectDetailView,
+    CompletedTransectHistoryEntryView,
+    CompletedTransectHistoryListView,
+    CompletedTransectHistoryRecordView,
     CompletedTransectListView,
+    CompletedWorkflowHistoryEntryView,
+    CompletedWorkflowHistoryListView,
+    CompletedWorkflowHistoryRecordView,
     CompletedWorkflowListView,
     DashboardView,
     DataLogFileDetailView,
@@ -12,9 +21,13 @@ from .views import (
     DataTypeDetailView,
     DataTypeListView,
     DataTypeOptionListView,
+    HistoryIndexView,
     ProjectConfigDetailView,
     ProjectConfigListView,
     QuestionDetailView,
+    QuestionHistoryEntryView,
+    QuestionHistoryListView,
+    QuestionHistoryRecordView,
     QuestionListView,
     TemplateTransectListView,
 )
@@ -73,6 +86,57 @@ log_patterns = (
     "logs",
 )
 
+history_patterns = (
+    [
+        path("", HistoryIndexView.as_view(), name="index"),
+        path("transects/", CompletedTransectHistoryListView.as_view(), name="transects"),
+        path(
+            "transects/<int:pk>/",
+            CompletedTransectHistoryRecordView.as_view(),
+            name="transect_record",
+        ),
+        path(
+            "transects/<int:pk>/<int:history_id>/",
+            CompletedTransectHistoryEntryView.as_view(),
+            name="transect_entry",
+        ),
+        path("occurrences/", CompletedOccurrenceHistoryListView.as_view(), name="occurrences"),
+        path(
+            "occurrences/<int:pk>/",
+            CompletedOccurrenceHistoryRecordView.as_view(),
+            name="occurrence_record",
+        ),
+        path(
+            "occurrences/<int:pk>/<int:history_id>/",
+            CompletedOccurrenceHistoryEntryView.as_view(),
+            name="occurrence_entry",
+        ),
+        path("workflows/", CompletedWorkflowHistoryListView.as_view(), name="workflows"),
+        path(
+            "workflows/<str:pk>/",
+            CompletedWorkflowHistoryRecordView.as_view(),
+            name="workflow_record",
+        ),
+        path(
+            "workflows/<str:pk>/<int:history_id>/",
+            CompletedWorkflowHistoryEntryView.as_view(),
+            name="workflow_entry",
+        ),
+        path("questions/", QuestionHistoryListView.as_view(), name="questions"),
+        path(
+            "questions/<str:pk>/",
+            QuestionHistoryRecordView.as_view(),
+            name="question_record",
+        ),
+        path(
+            "questions/<str:pk>/<int:history_id>/",
+            QuestionHistoryEntryView.as_view(),
+            name="question_entry",
+        ),
+    ],
+    "history",
+)
+
 urlpatterns = [
     path("", DashboardView.as_view(), name="dashboard"),
     path("transects/", include(transect_patterns)),
@@ -81,4 +145,5 @@ urlpatterns = [
     path("templates/", include(template_patterns)),
     path("reference/", include(reference_patterns)),
     path("logs/", include(log_patterns)),
+    path("history/", include(history_patterns)),
 ]

@@ -59,7 +59,7 @@ NAVIGATION_SECTIONS: List[NavigationLink] = [
         "children": [
             {"label": "Completed Transects", "url_name": "transects:list"},
             {"label": "Transect Detail", "url_name": "transects:detail", "fallback_url": "#"},
-            {"label": "Transect History", "url_name": "transects:history", "fallback_url": "#"},
+            {"label": "Transect History", "url_name": "history:transects"},
         ],
     },
     {
@@ -69,7 +69,7 @@ NAVIGATION_SECTIONS: List[NavigationLink] = [
         "children": [
             {"label": "Completed Occurrences", "url_name": "occurrences:list"},
             {"label": "Occurrence Detail", "url_name": "occurrences:detail", "fallback_url": "#"},
-            {"label": "Occurrence History", "url_name": "occurrences:history", "fallback_url": "#"},
+            {"label": "Occurrence History", "url_name": "history:occurrences"},
         ],
     },
     {
@@ -79,7 +79,7 @@ NAVIGATION_SECTIONS: List[NavigationLink] = [
         "children": [
             {"label": "Workflow Runs", "url_name": "workflows:list"},
             {"label": "Workflow Detail", "url_name": "workflows:detail", "fallback_url": "#"},
-            {"label": "Workflow History", "url_name": "workflows:history", "fallback_url": "#"},
+            {"label": "Workflow History", "url_name": "history:workflows"},
         ],
     },
     {
@@ -116,10 +116,10 @@ NAVIGATION_SECTIONS: List[NavigationLink] = [
         "icon": "fa-solid fa-clock-rotate-left",
         "url_name": "history:index",
         "children": [
-            {"label": "Transect History", "url_name": "history:transects", "fallback_url": "#"},
-            {"label": "Occurrence History", "url_name": "history:occurrences", "fallback_url": "#"},
-            {"label": "Workflow History", "url_name": "history:workflows", "fallback_url": "#"},
-            {"label": "Question History", "url_name": "history:questions", "fallback_url": "#"},
+            {"label": "Transect History", "url_name": "history:transects"},
+            {"label": "Occurrence History", "url_name": "history:occurrences"},
+            {"label": "Workflow History", "url_name": "history:workflows"},
+            {"label": "Question History", "url_name": "history:questions"},
         ],
     },
 ]
