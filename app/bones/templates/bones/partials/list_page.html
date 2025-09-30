@@ -1,0 +1,22 @@
+{# Shared layout for list archetypes. Expects page_title, page_icon, intro_text,
+   table_headers, table_rows, table_caption, filter, result_count, filter_active,
+   filter_querystring, and pagination context from BonesListView. #}
+<section class="w3-section">
+    <header class="w3-margin-bottom">
+        <h2 class="w3-xxlarge w3-margin-bottom">
+            {% if page_icon %}
+                <span class="fa-fw {{ page_icon }}" aria-hidden="true"></span>
+            {% endif %}
+            {{ page_title }}
+        </h2>
+        {% if intro_text %}
+            <p class="w3-text-grey">{{ intro_text }}</p>
+        {% endif %}
+        <p class="w3-small w3-text-grey">
+            Showing {{ result_count }} {{ result_count|pluralize:"record,records" }}{% if filter_active %} (filtered){% endif %}.
+        </p>
+    </header>
+    {% include "bones/partials/filter_form.html" %}
+    {% include "bones/partials/table.html" with table_headers=table_headers table_rows=table_rows table_caption=table_caption %}
+    {% include "bones/partials/pagination.html" %}
+</section>

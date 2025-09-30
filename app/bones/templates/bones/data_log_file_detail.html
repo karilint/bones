@@ -1,0 +1,27 @@
+{% extends "bones/base.html" %}
+{% block title %}{{ page_title }} · Bones{% endblock %}
+{% block head_extra %}
+    {{ block.super }}
+    {{ form.media.css }}
+{% endblock %}
+{% block scripts %}
+    {{ block.super }}
+    {{ form.media.js }}
+{% endblock %}
+{% block breadcrumbs %}
+    {% include "bones/partials/breadcrumbs.html" %}
+{% endblock %}
+{% block main %}
+    <section class="w3-section">
+        {% include "bones/partials/detail_header.html" %}
+        <div class="w3-row-padding">
+            <div class="w3-col l8 m12">
+                {% include "bones/partials/detail_metadata.html" with detail_sections=detail_sections %}
+            </div>
+            <div class="w3-col l4 m12">
+                {% include "bones/partials/detail_actions.html" with list_url=list_url history_url=history_url extra_actions=extra_actions %}
+            </div>
+        </div>
+        {% include "bones/partials/form_panel.html" with form=form submit_label=submit_label form_enctype=form_enctype %}
+    </section>
+{% endblock %}

@@ -1,0 +1,38 @@
+{#
+    Render a responsive filter form for list archetypes. Expects ``filter`` in the
+    context (a django-filter FilterSet) and the current ``request`` to build the
+    clear link. Widgets inherit W3.CSS utility classes from the FilteredListViewMixin.
+#}
+{% if filter_error %}
+    <div class="w3-panel w3-pale-red w3-border w3-border-red">
+        <p class="w3-margin-0">Filtering is temporarily unavailable. Please try again later.</p>
+    </div>
+{% endif %}
+{% if filter %}
+    <form method="get" class="w3-card w3-white w3-padding w3-margin-bottom" aria-label="Filters">
+        <div class="w3-row-padding">
+            {% for field in filter.form %}
+                <div class="w3-col s12 m6 l4 w3-margin-bottom">
+                    <label class="w3-text-grey w3-small" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.help_text %}
+                        <p class="w3-small w3-text-grey">{{ field.help_text }}</p>
+                    {% endif %}
+                    {% for error in field.errors %}
+                        <span class="w3-text-red w3-small">{{ error }}</span>
+                    {% endfor %}
+                </div>
+            {% endfor %}
+        </div>
+        <div class="w3-margin-top">
+            <button type="submit" class="w3-button w3-blue w3-margin-right">
+                <span class="fa fa-filter" aria-hidden="true"></span>
+                <span class="w3-margin-left">Apply filters</span>
+            </button>
+            <a href="{{ request.path }}" class="w3-button w3-white w3-border">
+                <span class="fa fa-eraser" aria-hidden="true"></span>
+                <span class="w3-margin-left">Clear</span>
+            </a>
+        </div>
+    </form>
+{% endif %}
