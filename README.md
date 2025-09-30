@@ -72,6 +72,14 @@ loaded automatically by `settings.py`.
 Automated tests run against an in-project SQLite database to keep the suite lightweight. No
 additional configuration is required—`python manage.py test` will switch to SQLite automatically.
 
+## Application architecture
+
+The Django app is organised around reusable navigation, list, detail, master-detail, dashboard, and
+history archetypes. The new [architecture overview](docs/architecture.md) summarises how forms,
+filters, templates, and view layers collaborate and links back to the shared
+[Django app guidelines](https://github.com/karilint/bones/blob/main/docs/django_app_guidelines.md)
+for quick reference.
+
 ## Environment variables
 
 `settings.py` loads configuration values from the `.env` file if present. The following variables
