@@ -26,16 +26,30 @@ def _safe_reverse(url_name: Optional[str], *, kwargs: Optional[Dict[str, Any]] =
     The dashboard links reference routes that will be introduced later in the
     implementation plan. This helper mirrors the navigation behaviour by
     swallowing :class:`~django.urls.NoReverseMatch` errors so templates can
-    render stable ``href`` attributes while the URL map evolves.
+    render stable ``href`` attributes while the URL map evolves. It also
+    retries with the ``bones:`` namespace when callers provide shorthand route
+    names so that existing helpers continue to work during the transition.
     """
 
     if not url_name:
         return None
 
-    try:
-        return reverse(url_name, kwargs=kwargs)
-    except NoReverseMatch:
-        return None
+    candidate_names = [url_name]
+    if not url_name.startswith("bones:"):
+        candidate_names.append(f"bones:{url_name}")
+
+    for candidate in candidate_names:
+        try:
+            return reverse(candidate, kwargs=kwargs)
+        except NoReverseMatch:
+            continue
+    return None
+
+
+def _fallback_url() -> str:
+    """Return a guaranteed-resolvable URL for dashboard fallbacks."""
+
+    return _safe_reverse("bones:dashboard") or "/"
 
 
 def _fallback_url() -> str:
@@ -92,25 +106,25 @@ class DashboardView(BonesAuthMixin, TemplateView):
                 "label": "Completed Transects",
                 "icon": "fa-solid fa-route",
                 "count": completed_transects,
-                "url": _safe_reverse("transects:list") or _fallback_url(),
+                "url": _safe_reverse("bones:transects:list") or _fallback_url(),
             },
             {
                 "label": "Completed Occurrences",
                 "icon": "fa-solid fa-frog",
                 "count": completed_occurrences,
-                "url": _safe_reverse("occurrences:list") or _fallback_url(),
+                "url": _safe_reverse("bones:occurrences:list") or _fallback_url(),
             },
             {
                 "label": "Completed Workflows",
                 "icon": "fa-solid fa-diagram-project",
                 "count": completed_workflows,
-                "url": _safe_reverse("workflows:list") or _fallback_url(),
+                "url": _safe_reverse("bones:workflows:list") or _fallback_url(),
             },
             {
                 "label": "Outstanding Tasks",
                 "icon": "fa-solid fa-clipboard-list",
                 "count": outstanding_tasks,
-                "url": _safe_reverse("workflows:list") or _fallback_url(),
+                "url": _safe_reverse("bones:workflows:list") or _fallback_url(),
             },
         ]
 
@@ -160,7 +174,7 @@ class DashboardView(BonesAuthMixin, TemplateView):
                     "start_time": transect.start_time,
                     "state": transect.state,
                     "url": _safe_reverse(
-                        "transects:detail", kwargs={"pk": transect.pk}
+                        "bones:transects:detail", kwargs={"pk": transect.pk}
                     )
                     or _fallback_url(),
                 }
@@ -186,7 +200,7 @@ class DashboardView(BonesAuthMixin, TemplateView):
                     "transect_name": getattr(occurrence.transect, "name", None),
                     "state": occurrence.state,
                     "url": _safe_reverse(
-                        "occurrences:detail", kwargs={"pk": occurrence.pk}
+                        "bones:occurrences:detail", kwargs={"pk": occurrence.pk}
                     )
                     or _fallback_url(),
                 }
@@ -207,7 +221,7 @@ class DashboardView(BonesAuthMixin, TemplateView):
 
         for upload in uploads:
             upload["url"] = _safe_reverse(
-                "logs:detail", kwargs={"pk": upload["id"]}
+                "bones:logs:detail", kwargs={"pk": upload["id"]}
             ) or _fallback_url()
         return uploads
 
@@ -278,14 +292,14 @@ class DashboardView(BonesAuthMixin, TemplateView):
                 "label": "Review Pending Audits",
                 "description": "Transects awaiting post-survey audit.",
                 "icon": "fa-solid fa-clipboard-check",
-                "url": _safe_reverse("transects:list") or _fallback_url(),
+                "url": _safe_reverse("bones:transects:list") or _fallback_url(),
                 "count": pending_audits,
             },
             {
                 "label": "Browse History Timeline",
                 "description": "Inspect recent changes across survey data.",
                 "icon": "fa-solid fa-clock-rotate-left",
-                "url": _safe_reverse("history:index") or _fallback_url(),
+                "url": _safe_reverse("bones:history:index") or _fallback_url(),
                 "count": history_count,
             },
         ]

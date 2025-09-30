@@ -22,15 +22,23 @@ def _safe_reverse(url_name: Optional[str], *, kwargs: Optional[Mapping[str, Any]
     The navigation plan references routes that will come online over the course
     of the coding plan. Swallow ``NoReverseMatch`` errors so placeholder links
     can gracefully fall back to other working URLs until their corresponding
-    views exist.
+    views exist. When an app namespace is omitted the helper automatically
+    retries using the ``bones:`` prefix so callers can pass shorthand route
+    names without breaking links.
     """
     if not url_name:
         return None
 
-    try:
-        return reverse(url_name, kwargs=kwargs)
-    except NoReverseMatch:
-        return None
+    candidate_names = [url_name]
+    if not url_name.startswith("bones:"):
+        candidate_names.append(f"bones:{url_name}")
+
+    for candidate in candidate_names:
+        try:
+            return reverse(candidate, kwargs=kwargs)
+        except NoReverseMatch:
+            continue
+    return None
 
 
 def _materialise_link(link: NavigationLink) -> Dict[str, Any]:
@@ -65,104 +73,93 @@ NAVIGATION_SECTIONS: List[NavigationLink] = [
     {
         "label": "Dashboard",
         "icon": "fa-solid fa-gauge-high",
-        "url_name": "dashboard",
+        "url_name": "bones:dashboard",
         "children": [
-            {"label": "Overview", "url_name": "dashboard"},
+            {"label": "Overview", "url_name": "bones:dashboard"},
             {
                 "label": "Recent Activity",
-                "url_name": "history:dashboard",
-                "fallback_url_name": "history:index",
+                "url_name": "bones:history:index",
             },
         ],
     },
     {
         "label": "Transects",
         "icon": "fa-solid fa-route",
-        "url_name": "transects:list",
+        "url_name": "bones:transects:list",
         "children": [
-            {"label": "Completed Transects", "url_name": "transects:list"},
+            {"label": "Completed Transects", "url_name": "bones:transects:list"},
             {
                 "label": "Transect Detail",
-                "url_name": "transects:detail",
-                "fallback_url_name": "transects:list",
+                "url_name": "bones:transects:detail",
+                "fallback_url_name": "bones:transects:list",
             },
-            {"label": "Transect History", "url_name": "history:transects"},
+            {"label": "Transect History", "url_name": "bones:history:transects"},
         ],
     },
     {
         "label": "Occurrences",
         "icon": "fa-solid fa-frog",
-        "url_name": "occurrences:list",
+        "url_name": "bones:occurrences:list",
         "children": [
-            {"label": "Completed Occurrences", "url_name": "occurrences:list"},
+            {"label": "Completed Occurrences", "url_name": "bones:occurrences:list"},
             {
                 "label": "Occurrence Detail",
-                "url_name": "occurrences:detail",
-                "fallback_url_name": "occurrences:list",
+                "url_name": "bones:occurrences:detail",
+                "fallback_url_name": "bones:occurrences:list",
             },
-            {"label": "Occurrence History", "url_name": "history:occurrences"},
+            {"label": "Occurrence History", "url_name": "bones:history:occurrences"},
         ],
     },
     {
         "label": "Workflows",
         "icon": "fa-solid fa-diagram-project",
-        "url_name": "workflows:list",
+        "url_name": "bones:workflows:list",
         "children": [
-            {"label": "Workflow Runs", "url_name": "workflows:list"},
-            {
-                "label": "Workflow Detail",
-                "url_name": "workflows:detail",
-                "fallback_url_name": "workflows:list",
-            },
-            {"label": "Workflow History", "url_name": "history:workflows"},
+            {"label": "Workflow Runs", "url_name": "bones:workflows:list"},
+            {"label": "Workflow History", "url_name": "bones:history:workflows"},
         ],
     },
     {
         "label": "Templates",
         "icon": "fa-solid fa-layer-group",
-        "url_name": "templates:list",
+        "url_name": "bones:templates:list",
         "children": [
-            {"label": "Template Transects", "url_name": "templates:list"},
-            {
-                "label": "Template Detail",
-                "url_name": "templates:detail",
-                "fallback_url_name": "templates:list",
-            },
-            {"label": "Template Questions", "url_name": "templates:questions"},
+            {"label": "Template Transects", "url_name": "bones:templates:list"},
+            {"label": "Template Questions", "url_name": "bones:templates:questions"},
         ],
     },
     {
         "label": "Reference Data",
         "icon": "fa-solid fa-database",
-        "url_name": "reference:list",
+        "url_name": "bones:reference:list",
         "children": [
-            {"label": "Data Types", "url_name": "reference:data_types"},
-            {"label": "Data Type Options", "url_name": "reference:data_type_options"},
-            {"label": "Project Config", "url_name": "reference:project_config"},
+            {"label": "Data Types", "url_name": "bones:reference:data_types"},
+            {"label": "Data Type Options", "url_name": "bones:reference:data_type_options"},
+            {"label": "Project Config", "url_name": "bones:reference:project_config"},
         ],
     },
     {
         "label": "Data Logs",
         "icon": "fa-solid fa-file-arrow-down",
-        "url_name": "logs:list",
+        "url_name": "bones:logs:list",
         "children": [
-            {"label": "Uploaded Logs", "url_name": "logs:list"},
+            {"label": "Uploaded Logs", "url_name": "bones:logs:list"},
             {
                 "label": "Log Detail",
-                "url_name": "logs:detail",
-                "fallback_url_name": "logs:list",
+                "url_name": "bones:logs:detail",
+                "fallback_url_name": "bones:logs:list",
             },
         ],
     },
     {
         "label": "History",
         "icon": "fa-solid fa-clock-rotate-left",
-        "url_name": "history:index",
+        "url_name": "bones:history:index",
         "children": [
-            {"label": "Transect History", "url_name": "history:transects"},
-            {"label": "Occurrence History", "url_name": "history:occurrences"},
-            {"label": "Workflow History", "url_name": "history:workflows"},
-            {"label": "Question History", "url_name": "history:questions"},
+            {"label": "Transect History", "url_name": "bones:history:transects"},
+            {"label": "Occurrence History", "url_name": "bones:history:occurrences"},
+            {"label": "Workflow History", "url_name": "bones:history:workflows"},
+            {"label": "Question History", "url_name": "bones:history:questions"},
         ],
     },
 ]

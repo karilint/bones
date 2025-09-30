@@ -40,17 +40,27 @@ EM_DASH = "\u2014"
 
 
 def safe_reverse(name: str | None, *, kwargs: dict[str, object] | None = None) -> str | None:
-    """Resolve a URL name when available, otherwise return ``None``."""
+    """Resolve a URL name when available, otherwise return ``None``.
+
+    Accepts both fully-qualified ``bones:`` names and shorthand references to
+    keep legacy list views working while URLs are consolidated.
+    """
 
     if not name:
         return None
 
-    try:
-        if kwargs:
-            return reverse(name, kwargs=kwargs)
-        return reverse(name)
-    except NoReverseMatch:
-        return None
+    candidate_names = [name]
+    if not name.startswith("bones:"):
+        candidate_names.append(f"bones:{name}")
+
+    for candidate in candidate_names:
+        try:
+            if kwargs:
+                return reverse(candidate, kwargs=kwargs)
+            return reverse(candidate)
+        except NoReverseMatch:
+            continue
+    return None
 
 
 def format_datetime(value):
