@@ -1,0 +1,21 @@
+{% load i18n %}
+<section class="w3-section">
+    <header class="w3-margin-bottom">
+        <h3 class="w3-large w3-margin-0">
+            <span class="fa-fw fa-solid fa-list-check" aria-hidden="true"></span>
+            {% trans "Responses" %}
+        </h3>
+        <p class="w3-text-grey">{% trans "All responses collected for this occurrence." %}</p>
+    </header>
+    {% include "bones/partials/table.html" with table_headers=occurrence_response_headers table_rows=occurrence_response_rows table_caption=_('Occurrence responses') %}
+</section>
+<section class="w3-section">
+    <header class="w3-margin-bottom">
+        <h3 class="w3-large w3-margin-0">
+            <span class="fa-fw fa-solid fa-diagram-project" aria-hidden="true"></span>
+            {% trans "Workflows" %}
+        </h3>
+        <p class="w3-text-grey">{% trans "Completed workflows linked to this occurrence." %}</p>
+    </header>
+    {% include "bones/partials/table.html" with table_headers=occurrence_workflow_headers table_rows=occurrence_workflow_rows table_caption=_('Occurrence workflows') %}
+</section>

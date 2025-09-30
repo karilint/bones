@@ -1,0 +1,14 @@
+{% load i18n %}
+<section class="w3-section">
+    {% include "bones/partials/detail_metadata.html" with detail_sections=overview_sections %}
+</section>
+<section class="w3-section">
+    <header class="w3-margin-bottom">
+        <h3 class="w3-large w3-margin-0">
+            <span class="fa-fw fa-solid fa-clipboard-list" aria-hidden="true"></span>
+            {% trans "Pre/post survey notes" %}
+        </h3>
+        <p class="w3-text-grey">{% trans "Responses captured before and after the transect run." %}</p>
+    </header>
+    {% include "bones/partials/table.html" with table_headers=transect_info_headers table_rows=transect_info_rows table_caption=_('Transect notes') %}
+</section>
