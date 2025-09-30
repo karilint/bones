@@ -1,0 +1,23 @@
+/*
+ * Custom Bones overrides layered after W3.CSS. Keep rules minimal and
+ * component-specific so utility classes remain effective.
+ */
+
+body {
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+}
+
+.bones-tab-panel {
+    padding: 1rem 0;
+}
+
+.bones-tab-panel .w3-container {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+@media (max-width: 600px) {
+    header .w3-xxxlarge {
+        font-size: 2.4rem;
+    }
+}

@@ -1,0 +1,47 @@
+{# Render an action panel for detail pages. Expects list_url, history_url, and extra_actions. #}
+<aside class="w3-card w3-white w3-margin-bottom">
+    <header class="w3-container w3-padding">
+        <h3 class="w3-margin-0 w3-large">
+            <span class="fa-fw fa-solid fa-gear" aria-hidden="true"></span>
+            {{ action_title|default:"Actions" }}
+        </h3>
+    </header>
+    <div class="w3-container w3-padding">
+        <div class="w3-bar-block">
+            {% if list_url %}
+                <a href="{{ list_url }}" class="w3-bar-item w3-button w3-round w3-border w3-white w3-margin-bottom">
+                    <span class="fa-fw fa-solid fa-arrow-left" aria-hidden="true"></span>
+                    <span class="w3-margin-left">{{ back_label|default:"Back to list" }}</span>
+                </a>
+            {% endif %}
+            {% if history_url %}
+                <a href="{{ history_url }}" class="w3-bar-item w3-button w3-round w3-border w3-white w3-margin-bottom">
+                    <span class="fa-fw fa-solid fa-clock-rotate-left" aria-hidden="true"></span>
+                    <span class="w3-margin-left">{{ history_label|default:"View history" }}</span>
+                </a>
+            {% else %}
+                <span class="w3-bar-item w3-button w3-round w3-border w3-light-grey w3-margin-bottom w3-disabled" aria-disabled="true">
+                    <span class="fa-fw fa-solid fa-clock-rotate-left" aria-hidden="true"></span>
+                    <span class="w3-margin-left">{{ history_label|default:"History coming soon" }}</span>
+                </span>
+            {% endif %}
+            {% for action in extra_actions %}
+                {% if action.url %}
+                    <a href="{{ action.url }}" class="w3-bar-item w3-button w3-round w3-border w3-white w3-margin-bottom">
+                        {% if action.icon %}
+                            <span class="fa-fw {{ action.icon }}" aria-hidden="true"></span>
+                        {% endif %}
+                        <span class="w3-margin-left">{{ action.label }}</span>
+                    </a>
+                {% else %}
+                    <span class="w3-bar-item w3-button w3-round w3-border w3-light-grey w3-margin-bottom w3-disabled" aria-disabled="true">
+                        {% if action.icon %}
+                            <span class="fa-fw {{ action.icon }}" aria-hidden="true"></span>
+                        {% endif %}
+                        <span class="w3-margin-left">{{ action.label }}</span>
+                    </span>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+</aside>

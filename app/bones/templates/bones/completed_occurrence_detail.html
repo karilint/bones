@@ -1,0 +1,18 @@
+{% extends "bones/base.html" %}
+{% block title %}{{ page_title }} · Bones{% endblock %}
+{% block breadcrumbs %}
+    {% include "bones/partials/breadcrumbs.html" %}
+{% endblock %}
+{% block main %}
+    <section class="w3-section">
+        {% include "bones/partials/detail_header.html" %}
+        <div class="w3-row-padding">
+            <div class="w3-col l9 m12">
+                {% include "bones/partials/tabs.html" with tabs=tabs tablist_label=tablist_label %}
+            </div>
+            <div class="w3-col l3 m12">
+                {% include "bones/partials/detail_actions.html" with list_url=list_url history_url=history_url extra_actions=extra_actions %}
+            </div>
+        </div>
+    </section>
+{% endblock %}

@@ -1,0 +1,94 @@
+{#
+    Render the primary navigation bar. Expects a ``navigation_sections`` iterable made up of
+    dictionaries with ``label``, ``icon`` (Font Awesome classes), ``url`` (optional), and
+    ``children`` (optional list of child dictionaries containing ``label``/``url`` pairs).
+    When no navigation data is provided, a placeholder is displayed so the layout remains stable.
+#}
+<div class="w3-bar w3-white w3-small w3-hide-small">
+    {% if navigation_sections %}
+        {% for section in navigation_sections %}
+            <div class="w3-dropdown-hover">
+                <a href="{{ section.url|default:'#' }}" class="w3-bar-item w3-button">
+                    {% if section.icon %}
+                        <span class="fa-fw {{ section.icon }}" aria-hidden="true"></span>
+                    {% endif %}
+                    <span class="w3-hide-small">{{ section.label }}</span>
+                    {% if section.children %}
+                        <i class="fa fa-caret-down" aria-hidden="true"></i>
+                        <span class="w3-hide">Open {{ section.label }} menu</span>
+                    {% endif %}
+                </a>
+                {% if section.children %}
+                    <div class="w3-dropdown-content w3-bar-block w3-card w3-white">
+                        {% for child in section.children %}
+                            <a href="{{ child.url }}" class="w3-bar-item w3-button">
+                                {% if child.icon %}
+                                    <span class="fa-fw {{ child.icon }}" aria-hidden="true"></span>
+                                {% endif %}
+                                {{ child.label }}
+                            </a>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+        {% endfor %}
+    {% else %}
+        <span class="w3-bar-item w3-text-grey">Navigation coming soon</span>
+    {% endif %}
+</div>
+<div class="w3-bar w3-white w3-small w3-hide-medium w3-hide-large">
+    {% if navigation_sections %}
+        <button
+            class="w3-bar-item w3-button w3-white w3-border"
+            data-bones-nav-toggle
+            aria-controls="bones-mobile-nav"
+            aria-expanded="false"
+            type="button"
+        >
+            <i class="fa fa-bars" aria-hidden="true"></i>
+            <span class="w3-hide">Toggle navigation</span>
+        </button>
+        <div id="bones-mobile-nav" class="w3-bar-block w3-white w3-hide">
+            {% for section in navigation_sections %}
+                <a href="{{ section.url|default:'#' }}" class="w3-bar-item w3-button">
+                    {% if section.icon %}
+                        <span class="fa-fw {{ section.icon }}" aria-hidden="true"></span>
+                    {% endif %}
+                    {{ section.label }}
+                </a>
+                {% if section.children %}
+                    <div class="w3-container w3-padding-small w3-border-top">
+                        {% for child in section.children %}
+                            <a href="{{ child.url }}" class="w3-bar-item w3-button w3-small w3-padding-small">
+                                {% if child.icon %}
+                                    <span class="fa-fw {{ child.icon }}" aria-hidden="true"></span>
+                                {% endif %}
+                                {{ child.label }}
+                            </a>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    {% else %}
+        <span class="w3-bar-item w3-text-grey">Navigation coming soon</span>
+    {% endif %}
+</div>
+<script>
+    (function() {
+        const toggle = document.querySelector('[data-bones-nav-toggle]');
+        const target = document.getElementById('bones-mobile-nav');
+        if (!toggle || !target) {
+            return;
+        }
+        toggle.addEventListener('click', function () {
+            const isOpen = target.classList.toggle('w3-show');
+            if (isOpen) {
+                target.classList.remove('w3-hide');
+            } else {
+                target.classList.add('w3-hide');
+            }
+            toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        });
+    })();
+</script>
