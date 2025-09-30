@@ -1,0 +1,43 @@
+{% load i18n %}
+<section class="w3-section">
+    <header class="w3-margin-bottom">
+        <h3 class="w3-large w3-margin-0">
+            <span class="fa-fw fa-solid fa-clock-rotate-left" aria-hidden="true"></span>
+            {% trans "History" %}
+        </h3>
+        <p class="w3-text-grey">{% trans "Recent edits captured by django-simple-history." %}</p>
+    </header>
+    {% if transect_history_error %}
+        <div class="w3-panel w3-pale-red w3-border w3-border-red">
+            <p class="w3-margin-0">{% trans "History entries are unavailable at the moment." %}</p>
+        </div>
+    {% elif transect_history_entries %}
+        <ul class="w3-ul w3-card-4">
+            {% for entry in transect_history_entries %}
+                <li class="w3-padding">
+                    <div class="w3-small w3-text-grey">
+                        {{ entry.history_date|date:"DATETIME_FORMAT" }}
+                    </div>
+                    <div class="w3-margin-top w3-margin-bottom">
+                        {% if entry.history_type == '+' %}
+                            <span class="w3-tag w3-round w3-green">{% trans "Created" %}</span>
+                        {% elif entry.history_type == '-' %}
+                            <span class="w3-tag w3-round w3-red">{% trans "Deleted" %}</span>
+                        {% else %}
+                            <span class="w3-tag w3-round w3-blue">{% trans "Updated" %}</span>
+                        {% endif %}
+                        {% if entry.history_user %}
+                            <span class="w3-margin-left">{% blocktrans with user=entry.history_user %}by {{ user }}{% endblocktrans %}</span>
+                        {% endif %}
+                    </div>
+                    {% if entry.history_change_reason %}
+                        <p class="w3-small">{{ entry.history_change_reason }}</p>
+                    {% endif %}
+                    <p class="w3-small w3-text-grey">{% trans "State" %}: {{ entry.state|default:"—" }}</p>
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p class="w3-text-grey">{% trans "No historical entries recorded for this transect yet." %}</p>
+    {% endif %}
+</section>
