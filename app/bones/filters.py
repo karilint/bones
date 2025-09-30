@@ -11,6 +11,7 @@ from typing import Iterable, Tuple
 import django_filters
 from django import forms
 from django.core.exceptions import ImproperlyConfigured
+from django.db import DatabaseError
 from django_select2.forms import ModelSelect2Widget
 
 from .forms import (
@@ -70,19 +71,30 @@ class FilteredListViewMixin:
 
     filterset_class = None
     filterset = None
+    filter_error = None
 
     def get_filterset_class(self):
         if self.filterset_class is None:
             raise ImproperlyConfigured("filterset_class must be set")
         return self.filterset_class
 
-    def get_filterset(self, queryset=None):
+    def get_filterset(self, *, queryset):
         filterset_class = self.get_filterset_class()
-        filterset = filterset_class(
-            data=self.request.GET or None,
-            queryset=queryset if queryset is not None else self.get_queryset(),
-        )
-        self._apply_widget_styles(filterset.form)
+        try:
+            filterset = filterset_class(
+                data=self.request.GET or None,
+                queryset=queryset,
+            )
+        except (DatabaseError, ImproperlyConfigured) as exc:
+            self.filter_error = exc
+            return None
+
+        try:
+            form = filterset.form
+        except (DatabaseError, ImproperlyConfigured) as exc:
+            self.filter_error = exc
+        else:
+            self._apply_widget_styles(form)
         return filterset
 
     def _apply_widget_styles(self, form):
@@ -129,15 +141,40 @@ class FilteredListViewMixin:
 
         widget.attrs["class"] = " ".join(existing).strip()
 
-        return None
-
     def get_queryset(self):  # pragma: no cover - integration point for future views
-        queryset = super().get_queryset()
-        self.filterset = self.get_filterset(queryset=queryset)
-        return self.filterset.qs
+        try:
+            queryset = super().get_queryset()
+        except (DatabaseError, ImproperlyConfigured) as exc:
+            self.filter_error = exc
+            self.filterset = None
+            return self._empty_queryset()
+
+        filterset = self.get_filterset(queryset=queryset)
+        if filterset is None:
+            self.filterset = None
+            return self._safe_none(queryset)
+
+        self.filterset = filterset
+        try:
+            return filterset.qs
+        except (DatabaseError, ImproperlyConfigured) as exc:
+            self.filter_error = exc
+            return self._safe_none(queryset)
+
+    def _safe_none(self, queryset):
+        if hasattr(queryset, "none"):
+            return queryset.none()
+        return self._empty_queryset()
+
+    def _empty_queryset(self):
+        model = getattr(self, "model", None)
+        if model is not None:
+            return model._default_manager.none()
+        return []
 
     def get_context_data(self, **kwargs):  # pragma: no cover - integration point
         kwargs.setdefault("filter", self.filterset)
+        kwargs.setdefault("filter_error", self.filter_error)
         return super().get_context_data(**kwargs)
 
 
@@ -178,8 +215,12 @@ class CompletedTransectFilterSet(Select2FilterSetMixin, django_filters.FilterSet
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        state_values = CompletedTransect.objects.values_list("state", flat=True)
-        choices = _state_choices(state_values)
+        try:
+            state_values = CompletedTransect.objects.values_list("state", flat=True)
+        except (DatabaseError, ImproperlyConfigured):
+            choices = _state_choices(())
+        else:
+            choices = _state_choices(state_values)
         self.filters["state"].extra["choices"] = choices
         self.filters["state"].field.choices = choices
         self.filters["state"].field.widget.attrs.setdefault("class", "w3-select")
@@ -227,8 +268,14 @@ class CompletedOccurrenceFilterSet(Select2FilterSetMixin, django_filters.FilterS
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        state_values = CompletedOccurrence.objects.values_list("state", flat=True)
-        choices = _state_choices(state_values)
+        try:
+            state_values = CompletedOccurrence.objects.values_list(
+                "state", flat=True
+            )
+        except (DatabaseError, ImproperlyConfigured):
+            choices = _state_choices(())
+        else:
+            choices = _state_choices(state_values)
         self.filters["state"].extra["choices"] = choices
         self.filters["state"].field.choices = choices
         self.filters["state"].field.widget.attrs.setdefault("class", "w3-select")

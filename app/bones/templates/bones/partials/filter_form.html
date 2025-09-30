@@ -3,6 +3,11 @@
     context (a django-filter FilterSet) and the current ``request`` to build the
     clear link. Widgets inherit W3.CSS utility classes from the FilteredListViewMixin.
 #}
+{% if filter_error %}
+    <div class="w3-panel w3-pale-red w3-border w3-border-red">
+        <p class="w3-margin-0">Filtering is temporarily unavailable. Please try again later.</p>
+    </div>
+{% endif %}
 {% if filter %}
     <form method="get" class="w3-card w3-white w3-padding w3-margin-bottom" aria-label="Filters">
         <div class="w3-row-padding">
