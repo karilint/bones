@@ -1,0 +1,40 @@
+{# Render a W3.CSS styled form. Requires form, submit_label, form_enctype, form_method. #}
+<section class="w3-section">
+    <form method="{{ form_method|default:'post' }}"{% if form_enctype %} enctype="{{ form_enctype }}"{% endif %} class="w3-card w3-white">
+        <div class="w3-container w3-padding">
+            {% csrf_token %}
+            {% if form.non_field_errors %}
+                <div class="w3-panel w3-pale-red w3-border w3-round-large">
+                    <h3 class="w3-margin-top-0">Please correct the errors below</h3>
+                    <ul class="w3-ul w3-small">
+                        {% for error in form.non_field_errors %}
+                            <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+            {% for field in form %}
+                <div class="w3-margin-bottom">
+                    <label for="{{ field.id_for_label }}" class="w3-text-grey w3-small">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.help_text %}
+                        <p class="w3-small w3-text-grey">{{ field.help_text }}</p>
+                    {% endif %}
+                    {% if field.errors %}
+                        <ul class="w3-ul w3-small w3-text-red">
+                            {% for error in field.errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+        <footer class="w3-container w3-padding w3-light-grey w3-right-align">
+            <button type="submit" class="w3-button w3-blue w3-round">
+                <span class="fa-fw fa-solid fa-floppy-disk" aria-hidden="true"></span>
+                <span class="w3-margin-left">{{ submit_label|default:"Save changes" }}</span>
+            </button>
+        </footer>
+    </form>
+</section>
