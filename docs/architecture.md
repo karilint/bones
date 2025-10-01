@@ -74,6 +74,17 @@ widgets, and history timelines.
   breadcrumbs so users can review change metadata alongside the related records
   and navigation actions.
 
+## Database indexes
+
+* SQL Server runs with unmanaged tables, so performance-sensitive indexes are
+  maintained through raw `RunSQL` migrations under `app/bones/migrations/`.
+* The questions list and select2 widgets previously scanned the `Questions`
+  table when filtering by workflow or data type, or when ordering prompts.
+  Migration `0006_question_indexes` adds nonclustered indexes on `WorkflowID`
+  and `DataTypeID` to accelerate the select2 filters used by
+  `QuestionFilterSet`, and creates an index on `Prompt` to support the
+  alphabetical ordering defined in `QuestionListView`.
+
 ## Static assets and styling
 
 * `templates/bones/base.html` loads W3.CSS, Font Awesome, and the project’s
