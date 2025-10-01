@@ -85,28 +85,36 @@ class MasterDetailViewTests(SimpleTestCase):
         ]
         responses = [
             SimpleNamespace(
+                question_number=2,
+                question_text="Second question",
+                response="Answer two",
+                response_code="R2",
+                skipped=False,
+                workflow=workflows[0],
+            ),
+            SimpleNamespace(
+                question_number=1,
                 question_text="First question",
                 response="Answer one",
                 response_code="R1",
                 skipped=False,
-                workflow=workflows[0],
-                instance_number=1,
+                workflow=workflows[2],
             ),
             SimpleNamespace(
-                question_text="Second question",
-                response="Answer two",
-                response_code="R2",
+                question_number=1,
+                question_text="Beta question",
+                response="Answer beta",
+                response_code="R4",
+                skipped=False,
+                workflow=workflows[1],
+            ),
+            SimpleNamespace(
+                question_number=2,
+                question_text="Skipped question",
+                response="Should hide",
+                response_code="R5",
                 skipped=True,
                 workflow=workflows[1],
-                instance_number=2,
-            ),
-            SimpleNamespace(
-                question_text="Follow up",
-                response="Answer three",
-                response_code="R3",
-                skipped=False,
-                workflow=workflows[2],
-                instance_number=1,
             ),
         ]
 
@@ -120,6 +128,7 @@ class MasterDetailViewTests(SimpleTestCase):
             instance_summaries = view.get_instance_summaries()
 
         self.assertEqual([summary["number"] for summary in instance_summaries], [1, 2])
+        self.assertNotIn("—", [summary["display_number"] for summary in instance_summaries])
 
         instance_one = instance_summaries[0]
         instance_two = instance_summaries[1]
@@ -131,3 +140,9 @@ class MasterDetailViewTests(SimpleTestCase):
         self.assertEqual(len(instance_two["response_rows"]), 1)
         self.assertEqual(len(instance_two["workflow_rows"]), 1)
         self.assertEqual(instance_two["url"], "/workflows/?occurrence=42&instance_number=2")
+
+        instance_one_question_order = [row[0]["value"] for row in instance_one["response_rows"]]
+        self.assertEqual(instance_one_question_order, ["First question", "Second question"])
+
+        instance_two_questions = [row[0]["value"] for row in instance_two["response_rows"]]
+        self.assertEqual(instance_two_questions, ["Beta question"])

@@ -1,7 +1,7 @@
 """Master-detail view archetypes for completed records."""
 from __future__ import annotations
 
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping, Sequence
 from urllib.parse import urlencode
 
 from django.db import DatabaseError
@@ -433,6 +433,32 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
             )
         return headers, rows
 
+    @staticmethod
+    def _resolve_instance_number(entry: Any) -> Any:
+        value = getattr(entry, "instance_number", None)
+        if value is not None:
+            return value
+        workflow = getattr(entry, "workflow", None)
+        if workflow is not None:
+            return getattr(workflow, "instance_number", None)
+        return None
+
+    @staticmethod
+    def _sort_responses(entries: Sequence[Any]) -> list[Any]:
+        def _sort_key(response: Any) -> tuple[Any, Any, Any]:
+            workflow = getattr(response, "workflow", None)
+            template_workflow = getattr(workflow, "template_workflow", None)
+            workflow_name = getattr(template_workflow, "name", None)
+            if workflow_name is None:
+                workflow_name = getattr(workflow, "name", None)
+            if workflow_name is None:
+                workflow_name = getattr(workflow, "pk", "")
+            question_number = getattr(response, "question_number", None)
+            question_text = getattr(response, "question_text", "")
+            return (str(workflow_name).lower(), question_number if question_number is not None else float("inf"), question_text)
+
+        return sorted(entries, key=_sort_key)
+
     def get_response_table(
         self,
         responses: Iterable[Any] | None = None,
@@ -450,13 +476,16 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
         response_source = responses
         if response_source is None:
             response_source = getattr(self.object, "responses", None)
-        response_entries = self._as_list(response_source)
+        response_entries = [
+            entry for entry in self._as_list(response_source) if not getattr(entry, "skipped", False)
+        ]
         if instance_number is not None:
             response_entries = [
                 entry
                 for entry in response_entries
-                if getattr(entry, "instance_number", None) == instance_number
+                if self._resolve_instance_number(entry) == instance_number
             ]
+        response_entries = self._sort_responses(response_entries)
         for response in response_entries:
             workflow = getattr(response, "workflow", None)
             template_workflow = getattr(workflow, "template_workflow", None)
@@ -530,13 +559,17 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
         instance_order: list[Any] = []
 
         def _record_instance(value: Any) -> None:
+            if value is None:
+                return
             if value not in instance_order:
                 instance_order.append(value)
 
         for workflow in workflow_entries:
             _record_instance(getattr(workflow, "instance_number", None))
         for response in response_entries:
-            _record_instance(getattr(response, "instance_number", None))
+            _record_instance(self._resolve_instance_number(response))
+
+        instance_order.sort()
 
         summaries: list[dict[str, Any]] = []
         base_url = safe_reverse("workflows:list")
