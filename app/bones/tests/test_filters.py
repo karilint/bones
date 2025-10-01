@@ -8,9 +8,10 @@ from django.views.generic import ListView
 
 from ..filters import (
     FilteredListViewMixin,
+    TemplateTransectFilterSet,
     _state_choices,
 )
-from ..models import CompletedTransect
+from ..models import CompletedTransect, TemplateTransect
 
 
 class DummyFilterSet(django_filters.FilterSet):
@@ -90,3 +91,17 @@ class FilteredListViewMixinTests(SimpleTestCase):
         view.setup(request)
         with self.assertRaises(ImproperlyConfigured):
             view.get_queryset()
+
+
+class TemplateTransectFilterSetTests(SimpleTestCase):
+    def test_scheduling_filters_target_indexed_column(self):
+        queryset = TemplateTransect.objects.none()
+        filterset = TemplateTransectFilterSet(data={}, queryset=queryset)
+
+        scheduled_after = filterset.filters["scheduled_after"]
+        scheduled_before = filterset.filters["scheduled_before"]
+
+        self.assertEqual(scheduled_after.field_name, "scheduled_time")
+        self.assertEqual(scheduled_before.field_name, "scheduled_time")
+        self.assertEqual(scheduled_after.lookup_expr, "gte")
+        self.assertEqual(scheduled_before.lookup_expr, "lte")
