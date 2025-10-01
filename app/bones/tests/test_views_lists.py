@@ -5,7 +5,11 @@ import django_filters
 from django.test import RequestFactory, SimpleTestCase
 
 from ..models import CompletedTransect, TemplateTransect
-from ..views.lists import BonesListView, TemplateTransectListView
+from ..views.lists import (
+    BonesListView,
+    CompletedTransectListView,
+    TemplateTransectListView,
+)
 
 
 class DummyFilterSet(django_filters.FilterSet):
@@ -76,8 +80,8 @@ class TemplateTransectListViewTests(SimpleTestCase):
             has_perms=lambda perms: True,
         )
 
-    @patch("app.bones.views.lists.TemplateTransectFilterSet")
-    @patch("app.bones.views.lists.TemplateTransect.objects")
+    @patch("bones.views.lists.TemplateTransectFilterSet")
+    @patch("bones.views.lists.TemplateTransect.objects")
     def test_queryset_orders_by_descending_scheduled_time(
         self, mock_manager, mock_filterset
     ):
@@ -94,8 +98,75 @@ class TemplateTransectListViewTests(SimpleTestCase):
 
         view = TemplateTransectListView()
         view.setup(request)
+        view.filterset_class = mock_filterset
         queryset = view.get_queryset()
 
         mock_manager.order_by.assert_called_once_with("-scheduled_time")
         mock_filterset.assert_called_once_with(data={}, queryset=ordered_queryset)
         self.assertIs(queryset, ordered_queryset)
+
+
+class CompletedTransectListViewTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.user = SimpleNamespace(
+            is_authenticated=True,
+            has_perms=lambda perms: True,
+        )
+
+    @patch("bones.views.lists.CompletedTransectFilterSet")
+    @patch("bones.views.lists.CompletedTransect.objects")
+    def test_queryset_annotates_occurrence_counts(self, mock_manager, mock_filterset):
+        request = self.factory.get("/completed-transects/")
+        request.user = self.user
+
+        select_related_qs = MagicMock(name="SelectRelatedQuerySet")
+        with_counts_qs = MagicMock(name="WithOccurrenceCountsQuerySet")
+        ordered_qs = MagicMock(name="OrderedQuerySet")
+        ordered_qs.model = CompletedTransect
+
+        mock_manager.select_related.return_value = select_related_qs
+        select_related_qs.with_occurrence_counts.return_value = with_counts_qs
+        select_related_qs.with_occurrences = MagicMock(name="with_occurrences")
+        with_counts_qs.order_by.return_value = ordered_qs
+
+        filter_instance = mock_filterset.return_value
+        filter_instance.form = MagicMock()
+        filter_instance.qs = ordered_qs
+
+        view = CompletedTransectListView()
+        view.setup(request)
+        view.filterset_class = mock_filterset
+        queryset = view.get_queryset()
+
+        mock_manager.select_related.assert_called_once_with("transect_template")
+        select_related_qs.with_occurrence_counts.assert_called_once_with()
+        select_related_qs.with_occurrences.assert_not_called()
+        with_counts_qs.order_by.assert_called_once_with("-start_time")
+        mock_filterset.assert_called_once_with(data={}, queryset=ordered_qs)
+        self.assertIs(queryset, ordered_qs)
+
+    def test_table_rows_use_annotated_occurrence_count(self):
+        class DummyTransect:
+            def __init__(self):
+                self.pk = 1
+                self.name = "Transect"
+                self.transect_template = SimpleNamespace(name="Template")
+                self.start_time = None
+                self.end_time = None
+                self.state = "Complete"
+                self.occurrence_count = 5
+
+            @property
+            def occurrences(self):  # pragma: no cover - should not be accessed
+                raise AssertionError("occurrences should not be accessed")
+
+        view = CompletedTransectListView()
+        view.get_detail_url = MagicMock(return_value="detail-url")
+        view.get_action_buttons = MagicMock(return_value="actions")
+
+        rows = view.get_table_rows([DummyTransect()])
+
+        self.assertEqual(rows[0][5]["value"], 5)
+        view.get_detail_url.assert_called_once()
+        view.get_action_buttons.assert_called_once()
