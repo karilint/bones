@@ -230,7 +230,7 @@ class CompletedTransectListView(BonesListView):
     def get_queryset(self):
         self.queryset = (
             CompletedTransect.objects.select_related("transect_template")
-            .with_occurrences()
+            .with_occurrence_counts()
             .order_by("-start_time")
         )
         return super().get_queryset()
@@ -249,7 +249,10 @@ class CompletedTransectListView(BonesListView):
     def get_table_rows(self, transects: Iterable[CompletedTransect]):
         rows = []
         for transect in transects:
-            occurrences = transect.occurrences.all() if hasattr(transect, "occurrences") else []
+            occurrence_count = getattr(transect, "occurrence_count", None)
+            if occurrence_count is None and hasattr(transect, "occurrences"):
+                occurrence_count = transect.occurrences.count()
+            occurrence_count = occurrence_count or 0
             rows.append(
                 [
                     {"value": transect.name, "url": self.get_detail_url(transect)},
@@ -257,7 +260,7 @@ class CompletedTransectListView(BonesListView):
                     {"value": format_datetime(transect.start_time)},
                     {"value": format_datetime(transect.end_time)},
                     {"value": format_value(transect.state)},
-                    {"value": len(list(occurrences)), "classes": "w3-center"},
+                    {"value": occurrence_count, "classes": "w3-center"},
                     {"value": self.get_action_buttons(transect), "classes": "w3-center"},
                 ]
             )

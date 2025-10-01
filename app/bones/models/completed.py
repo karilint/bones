@@ -1,6 +1,6 @@
 """Completed entity models and query utilities."""
 from django.db import models
-from django.db.models import Prefetch
+from django.db.models import Count, Prefetch
 from simple_history.models import HistoricalRecords
 
 
@@ -70,6 +70,10 @@ class CompletedOccurrenceManager(models.Manager.from_queryset(CompletedOccurrenc
 
 class CompletedTransectQuerySet(models.QuerySet):
     """Query helpers for completed transects."""
+
+    def with_occurrence_counts(self):
+        """Annotate the number of occurrences related to each transect."""
+        return self.annotate(occurrence_count=Count("occurrences"))
 
     def with_occurrences(self):
         """Prefetch occurrences and their nested dependencies."""
