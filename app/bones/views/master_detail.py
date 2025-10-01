@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from typing import Any, Iterable, Mapping
+from urllib.parse import urlencode
 
 from django.db import DatabaseError
 from django.utils.translation import gettext_lazy as _
@@ -432,7 +433,12 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
             )
         return headers, rows
 
-    def get_response_table(self) -> tuple[list[dict[str, Any]], list[list[dict[str, Any]]]]:
+    def get_response_table(
+        self,
+        responses: Iterable[Any] | None = None,
+        *,
+        instance_number: Any | None = None,
+    ) -> tuple[list[dict[str, Any]], list[list[dict[str, Any]]]]:
         headers = [
             {"label": _("Question")},
             {"label": _("Response")},
@@ -441,8 +447,16 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
             {"label": _("Workflow")},
         ]
         rows: list[list[dict[str, Any]]] = []
-        responses = getattr(self.object, "responses", None)
-        response_entries = responses.all() if hasattr(responses, "all") else []
+        response_source = responses
+        if response_source is None:
+            response_source = getattr(self.object, "responses", None)
+        response_entries = self._as_list(response_source)
+        if instance_number is not None:
+            response_entries = [
+                entry
+                for entry in response_entries
+                if getattr(entry, "instance_number", None) == instance_number
+            ]
         for response in response_entries:
             workflow = getattr(response, "workflow", None)
             template_workflow = getattr(workflow, "template_workflow", None)
@@ -465,15 +479,28 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
             )
         return headers, rows
 
-    def get_workflow_table(self) -> tuple[list[dict[str, Any]], list[list[dict[str, Any]]]]:
+    def get_workflow_table(
+        self,
+        workflows: Iterable[Any] | None = None,
+        *,
+        instance_number: Any | None = None,
+    ) -> tuple[list[dict[str, Any]], list[list[dict[str, Any]]]]:
         headers = [
             {"label": _("Template workflow")},
             {"label": _("Instance")},
             {"label": _("Completed by")},
         ]
         rows: list[list[dict[str, Any]]] = []
-        workflows = getattr(self.object, "workflows", None)
-        workflow_entries = workflows.all() if hasattr(workflows, "all") else []
+        workflow_source = workflows
+        if workflow_source is None:
+            workflow_source = getattr(self.object, "workflows", None)
+        workflow_entries = self._as_list(workflow_source)
+        if instance_number is not None:
+            workflow_entries = [
+                entry
+                for entry in workflow_entries
+                if getattr(entry, "instance_number", None) == instance_number
+            ]
         for workflow in workflow_entries:
             workflow_pk = getattr(workflow, "pk", None)
             rows.append(
@@ -490,6 +517,59 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
                 ]
             )
         return headers, rows
+
+    def get_instance_summaries(
+        self,
+        *,
+        workflows: Iterable[Any] | None = None,
+        responses: Iterable[Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        workflow_entries = self._as_list(workflows if workflows is not None else getattr(self.object, "workflows", None))
+        response_entries = self._as_list(responses if responses is not None else getattr(self.object, "responses", None))
+
+        instance_order: list[Any] = []
+
+        def _record_instance(value: Any) -> None:
+            if value not in instance_order:
+                instance_order.append(value)
+
+        for workflow in workflow_entries:
+            _record_instance(getattr(workflow, "instance_number", None))
+        for response in response_entries:
+            _record_instance(getattr(response, "instance_number", None))
+
+        summaries: list[dict[str, Any]] = []
+        base_url = safe_reverse("workflows:list")
+        occurrence_pk = getattr(self.object, "pk", None)
+
+        for instance_number in instance_order:
+            _, workflow_rows = self.get_workflow_table(
+                workflow_entries,
+                instance_number=instance_number,
+            )
+            _, response_rows = self.get_response_table(
+                response_entries,
+                instance_number=instance_number,
+            )
+            url: str | None = None
+            if base_url and occurrence_pk is not None and instance_number is not None:
+                query = urlencode({
+                    "occurrence": occurrence_pk,
+                    "instance_number": instance_number,
+                })
+                url = f"{base_url}?{query}"
+
+            summaries.append(
+                {
+                    "number": instance_number,
+                    "display_number": format_value(instance_number),
+                    "workflow_rows": workflow_rows,
+                    "response_rows": response_rows,
+                    "url": url,
+                }
+            )
+
+        return summaries
 
     def get_history_entries(self) -> list[Any]:
         try:
@@ -526,9 +606,15 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         detail_headers, detail_rows = self.get_detail_table()
-        response_headers, response_rows = self.get_response_table()
-        workflow_headers, workflow_rows = self.get_workflow_table()
+        workflows = self._as_list(getattr(self.object, "workflows", None))
+        responses = self._as_list(getattr(self.object, "responses", None))
+        response_headers, response_rows = self.get_response_table(responses=responses)
+        workflow_headers, workflow_rows = self.get_workflow_table(workflows=workflows)
         history_entries = self.get_history_entries()
+        occurrence_instances = self.get_instance_summaries(
+            workflows=workflows,
+            responses=responses,
+        )
         context.update(
             {
                 "overview_sections": self.get_overview_sections(),
@@ -538,6 +624,7 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
                 "occurrence_response_rows": response_rows,
                 "occurrence_workflow_headers": workflow_headers,
                 "occurrence_workflow_rows": workflow_rows,
+                "occurrence_instances": occurrence_instances,
                 "occurrence_history_entries": history_entries,
                 "occurrence_history_error": self.history_error,
             }
