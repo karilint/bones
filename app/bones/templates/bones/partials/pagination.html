@@ -1,41 +1,73 @@
 {# Accessible pagination controls that preserve active filters. #}
+{% load pagination_tags %}
 {% if is_paginated %}
     <nav class="w3-margin-top" aria-label="Pagination">
-        <ul class="w3-pagination w3-border w3-round-large">
+        <ul class="w3-ul w3-border w3-round-large w3-white">
             {% with qs=filter_querystring %}
                 <li>
                     {% if page_obj.has_previous %}
-                        <a class="w3-button" href="?page=1{{ qs }}" aria-label="First page">&laquo;</a>
+                        <a class="w3-button w3-block w3-left-align" href="?page=1{{ qs }}" aria-label="First page">
+                            <span aria-hidden="true">&laquo;</span>
+                            <span class="w3-margin-left">First</span>
+                        </a>
                     {% else %}
-                        <span class="w3-button w3-disabled" aria-hidden="true">&laquo;</span>
+                        <span class="w3-button w3-block w3-left-align w3-disabled" aria-disabled="true">
+                            <span aria-hidden="true">&laquo;</span>
+                            <span class="w3-margin-left">First</span>
+                        </span>
                     {% endif %}
                 </li>
                 <li>
                     {% if page_obj.has_previous %}
-                        <a class="w3-button" href="?page={{ page_obj.previous_page_number }}{{ qs }}" aria-label="Previous page">&lsaquo;</a>
+                        <a class="w3-button w3-block w3-left-align" href="?page={{ page_obj.previous_page_number }}{{ qs }}" aria-label="Previous page">
+                            <span aria-hidden="true">&lsaquo;</span>
+                            <span class="w3-margin-left">Previous</span>
+                        </a>
                     {% else %}
-                        <span class="w3-button w3-disabled" aria-hidden="true">&lsaquo;</span>
+                        <span class="w3-button w3-block w3-left-align w3-disabled" aria-disabled="true">
+                            <span aria-hidden="true">&lsaquo;</span>
+                            <span class="w3-margin-left">Previous</span>
+                        </span>
                     {% endif %}
                 </li>
-                {% for num in page_obj.paginator.page_range %}
-                    {% if num == page_obj.number %}
-                        <li><span class="w3-button w3-blue" aria-current="page">{{ num }}</span></li>
-                    {% else %}
-                        <li><a class="w3-button" href="?page={{ num }}{{ qs }}">{{ num }}</a></li>
-                    {% endif %}
+                {% compact_page_range page_obj 3 as page_numbers %}
+                {% for num in page_numbers %}
+                    <li>
+                        {% if num == page_obj.number %}
+                            <span class="w3-button w3-block w3-left-align w3-blue" aria-current="page">
+                                <span class="w3-margin-right">Page</span>{{ num }}
+                            </span>
+                        {% else %}
+                            <a class="w3-button w3-block w3-left-align" href="?page={{ num }}{{ qs }}" aria-label="Go to page {{ num }}">
+                                <span class="w3-margin-right">Page</span>{{ num }}
+                            </a>
+                        {% endif %}
+                    </li>
                 {% endfor %}
                 <li>
                     {% if page_obj.has_next %}
-                        <a class="w3-button" href="?page={{ page_obj.next_page_number }}{{ qs }}" aria-label="Next page">&rsaquo;</a>
+                        <a class="w3-button w3-block w3-left-align" href="?page={{ page_obj.next_page_number }}{{ qs }}" aria-label="Next page">
+                            <span aria-hidden="true">&rsaquo;</span>
+                            <span class="w3-margin-left">Next</span>
+                        </a>
                     {% else %}
-                        <span class="w3-button w3-disabled" aria-hidden="true">&rsaquo;</span>
+                        <span class="w3-button w3-block w3-left-align w3-disabled" aria-disabled="true">
+                            <span aria-hidden="true">&rsaquo;</span>
+                            <span class="w3-margin-left">Next</span>
+                        </span>
                     {% endif %}
                 </li>
                 <li>
                     {% if page_obj.has_next %}
-                        <a class="w3-button" href="?page={{ page_obj.paginator.num_pages }}{{ qs }}" aria-label="Last page">&raquo;</a>
+                        <a class="w3-button w3-block w3-left-align" href="?page={{ page_obj.paginator.num_pages }}{{ qs }}" aria-label="Last page">
+                            <span aria-hidden="true">&raquo;</span>
+                            <span class="w3-margin-left">Last</span>
+                        </a>
                     {% else %}
-                        <span class="w3-button w3-disabled" aria-hidden="true">&raquo;</span>
+                        <span class="w3-button w3-block w3-left-align w3-disabled" aria-disabled="true">
+                            <span aria-hidden="true">&raquo;</span>
+                            <span class="w3-margin-left">Last</span>
+                        </span>
                     {% endif %}
                 </li>
             {% endwith %}
