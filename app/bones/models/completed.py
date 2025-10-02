@@ -57,6 +57,10 @@ class CompletedOccurrenceQuerySet(models.QuerySet):
         """Prefetch related information rows for display tabs."""
         return self.prefetch_related("details")
 
+    def with_response_counts(self):
+        """Annotate the number of responses captured for each occurrence."""
+        return self.annotate(response_count=Count("responses"))
+
     def with_related_data(self):
         """Bundle common prefetch chains for list/detail screens."""
         return self.with_responses().with_workflows().with_details()

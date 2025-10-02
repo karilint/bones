@@ -285,7 +285,7 @@ class CompletedOccurrenceListView(BonesListView):
     def get_queryset(self):
         self.queryset = (
             CompletedOccurrence.objects.select_related("transect", "transect__transect_template")
-            .with_related_data()
+            .with_response_counts()
             .order_by("-recording_start_time")
         )
         return super().get_queryset()
@@ -304,7 +304,10 @@ class CompletedOccurrenceListView(BonesListView):
     def get_table_rows(self, occurrences: Iterable[CompletedOccurrence]):
         rows = []
         for occurrence in occurrences:
-            responses = occurrence.responses.all() if hasattr(occurrence, "responses") else []
+            response_count = getattr(occurrence, "response_count", None)
+            if response_count is None and hasattr(occurrence, "responses"):
+                response_count = occurrence.responses.count()
+            response_count = response_count or 0
             transect = occurrence.transect
             transect_label = transect.name if transect else EM_DASH
             if transect and transect.transect_template:
@@ -319,7 +322,7 @@ class CompletedOccurrenceListView(BonesListView):
                     {"value": format_datetime(occurrence.recording_start_time)},
                     {"value": format_datetime(occurrence.recording_end_time)},
                     {"value": format_value(occurrence.state)},
-                    {"value": len(list(responses)), "classes": "w3-center"},
+                    {"value": response_count, "classes": "w3-center"},
                     {"value": self.get_action_buttons(occurrence), "classes": "w3-center"},
                 ]
             )

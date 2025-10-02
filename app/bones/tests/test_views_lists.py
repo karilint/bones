@@ -4,10 +4,11 @@ from unittest.mock import MagicMock, patch
 import django_filters
 from django.test import RequestFactory, SimpleTestCase
 
-from ..models import CompletedTransect, TemplateTransect
+from ..models import CompletedOccurrence, CompletedTransect, TemplateTransect
 from ..views.lists import (
     BonesListView,
     CompletedTransectListView,
+    CompletedOccurrenceListView,
     TemplateTransectListView,
 )
 
@@ -168,5 +169,73 @@ class CompletedTransectListViewTests(SimpleTestCase):
         rows = view.get_table_rows([DummyTransect()])
 
         self.assertEqual(rows[0][5]["value"], 5)
+        view.get_detail_url.assert_called_once()
+        view.get_action_buttons.assert_called_once()
+
+
+class CompletedOccurrenceListViewTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.user = SimpleNamespace(
+            is_authenticated=True,
+            has_perms=lambda perms: True,
+        )
+
+    @patch("bones.views.lists.CompletedOccurrenceFilterSet")
+    @patch("bones.views.lists.CompletedOccurrence.objects")
+    def test_queryset_annotates_response_counts(self, mock_manager, mock_filterset):
+        request = self.factory.get("/completed-occurrences/")
+        request.user = self.user
+
+        select_related_qs = MagicMock(name="SelectRelatedQuerySet")
+        with_counts_qs = MagicMock(name="WithResponseCountsQuerySet")
+        ordered_qs = MagicMock(name="OrderedQuerySet")
+        ordered_qs.model = CompletedOccurrence
+
+        mock_manager.select_related.return_value = select_related_qs
+        select_related_qs.with_response_counts.return_value = with_counts_qs
+        select_related_qs.with_related_data = MagicMock(name="with_related_data")
+        with_counts_qs.order_by.return_value = ordered_qs
+
+        filter_instance = mock_filterset.return_value
+        filter_instance.form = MagicMock()
+        filter_instance.qs = ordered_qs
+
+        view = CompletedOccurrenceListView()
+        view.setup(request)
+        view.filterset_class = mock_filterset
+        queryset = view.get_queryset()
+
+        mock_manager.select_related.assert_called_once_with(
+            "transect", "transect__transect_template"
+        )
+        select_related_qs.with_response_counts.assert_called_once_with()
+        select_related_qs.with_related_data.assert_not_called()
+        with_counts_qs.order_by.assert_called_once_with("-recording_start_time")
+        mock_filterset.assert_called_once_with(data={}, queryset=ordered_qs)
+        self.assertIs(queryset, ordered_qs)
+
+    def test_table_rows_use_annotated_response_count(self):
+        class DummyOccurrence:
+            def __init__(self):
+                self.pk = 1
+                self.occurrence_number = 42
+                self.transect = SimpleNamespace(name="Transect", transect_template="Template")
+                self.recording_start_time = None
+                self.recording_end_time = None
+                self.state = "Complete"
+                self.response_count = 3
+
+            @property
+            def responses(self):  # pragma: no cover - should not be accessed
+                raise AssertionError("responses should not be accessed")
+
+        view = CompletedOccurrenceListView()
+        view.get_detail_url = MagicMock(return_value="detail-url")
+        view.get_action_buttons = MagicMock(return_value="actions")
+
+        rows = view.get_table_rows([DummyOccurrence()])
+
+        self.assertEqual(rows[0][5]["value"], 3)
         view.get_detail_url.assert_called_once()
         view.get_action_buttons.assert_called_once()
