@@ -26,6 +26,7 @@ from .forms import (
 from .models import (
     CompletedOccurrence,
     CompletedTransect,
+    CompletedTransectInfo,
     CompletedWorkflow,
     DataLogFile,
     DataType,
@@ -38,6 +39,7 @@ from .models import (
 )
 
 DATE_INPUT_ATTRS = {"type": "date"}
+OLD_RESERVE_QUESTION_TEXT = "On old reserve?"
 
 
 def _state_choices(queryset: Iterable[str]) -> Tuple[Tuple[str, str], ...]:
@@ -45,6 +47,15 @@ def _state_choices(queryset: Iterable[str]) -> Tuple[Tuple[str, str], ...]:
 
     unique_states = sorted({value for value in queryset if value})
     return (("", "All states"), *[(state, state) for state in unique_states])
+
+
+def _info_choices(
+    queryset: Iterable[str], empty_label: str
+) -> Tuple[Tuple[str, str], ...]:
+    """Return normalized completed-transect info choices with an empty option."""
+
+    unique_values = sorted({value for value in queryset if value})
+    return (("", empty_label), *[(value, value) for value in unique_values])
 
 
 class Select2FilterSetMixin:
@@ -199,6 +210,19 @@ class CompletedTransectFilterSet(Select2FilterSetMixin, django_filters.FilterSet
         field_name="state",
         label="State",
         choices=(),
+        empty_label=None,
+    )
+    phase = django_filters.ChoiceFilter(
+        method="filter_phase",
+        label="Phase",
+        choices=(),
+        empty_label=None,
+    )
+    old_reserve_response = django_filters.ChoiceFilter(
+        method="filter_old_reserve_response",
+        label=OLD_RESERVE_QUESTION_TEXT,
+        choices=(),
+        empty_label=None,
     )
     transect_template = django_filters.ModelChoiceFilter(
         field_name="transect_template",
@@ -211,19 +235,64 @@ class CompletedTransectFilterSet(Select2FilterSetMixin, django_filters.FilterSet
 
     class Meta:
         model = CompletedTransect
-        fields = ["state", "transect_template"]
+        fields = ["state", "phase", "old_reserve_response", "transect_template"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         try:
             state_values = CompletedTransect.objects.values_list("state", flat=True)
+            choices = _state_choices(state_values)
         except (DatabaseError, ImproperlyConfigured):
             choices = _state_choices(())
-        else:
-            choices = _state_choices(state_values)
         self.filters["state"].extra["choices"] = choices
         self.filters["state"].field.choices = choices
         self.filters["state"].field.widget.attrs.setdefault("class", "w3-select")
+
+        try:
+            phase_values = CompletedTransectInfo.objects.values_list(
+                "pre_or_post", flat=True
+            )
+            phase_choices = _info_choices(phase_values, "All phases")
+        except (DatabaseError, ImproperlyConfigured):
+            phase_choices = _info_choices((), "All phases")
+        self.filters["phase"].extra["choices"] = phase_choices
+        self.filters["phase"].field.choices = phase_choices
+        self.filters["phase"].field.widget.attrs.setdefault("class", "w3-select")
+
+        try:
+            old_reserve_values = (
+                CompletedTransectInfo.objects.filter(
+                    question_text__iexact=OLD_RESERVE_QUESTION_TEXT
+                )
+                .values_list("response", flat=True)
+            )
+            old_reserve_choices = _info_choices(
+                old_reserve_values, "All responses"
+            )
+        except (DatabaseError, ImproperlyConfigured):
+            old_reserve_choices = _info_choices((), "All responses")
+        self.filters["old_reserve_response"].extra["choices"] = old_reserve_choices
+        self.filters["old_reserve_response"].field.choices = old_reserve_choices
+        self.filters["old_reserve_response"].field.widget.attrs.setdefault(
+            "class", "w3-select"
+        )
+
+    def filter_phase(self, queryset, name, value):
+        """Filter transects by pre/post phase captured in transect details."""
+
+        if not value:
+            return queryset
+        return queryset.filter(details__pre_or_post=value).distinct()
+
+    def filter_old_reserve_response(self, queryset, name, value):
+        """Filter transects by the response to the old-reserve question."""
+
+        if not value:
+            return queryset
+        return queryset.filter(
+            details__question_text__iexact=OLD_RESERVE_QUESTION_TEXT,
+            details__response=value,
+        ).distinct()
 
 
 class CompletedOccurrenceFilterSet(Select2FilterSetMixin, django_filters.FilterSet):
@@ -247,6 +316,7 @@ class CompletedOccurrenceFilterSet(Select2FilterSetMixin, django_filters.FilterS
         field_name="state",
         label="State",
         choices=(),
+        empty_label=None,
     )
     transect = django_filters.ModelChoiceFilter(
         field_name="transect",
@@ -272,10 +342,9 @@ class CompletedOccurrenceFilterSet(Select2FilterSetMixin, django_filters.FilterS
             state_values = CompletedOccurrence.objects.values_list(
                 "state", flat=True
             )
+            choices = _state_choices(state_values)
         except (DatabaseError, ImproperlyConfigured):
             choices = _state_choices(())
-        else:
-            choices = _state_choices(state_values)
         self.filters["state"].extra["choices"] = choices
         self.filters["state"].field.choices = choices
         self.filters["state"].field.widget.attrs.setdefault("class", "w3-select")

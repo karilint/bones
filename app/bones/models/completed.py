@@ -77,7 +77,7 @@ class CompletedTransectQuerySet(models.QuerySet):
 
     def with_occurrence_counts(self):
         """Annotate the number of occurrences related to each transect."""
-        return self.annotate(occurrence_count=Count("occurrences"))
+        return self.annotate(occurrence_count=Count("occurrences", distinct=True))
 
     def with_occurrences(self):
         """Prefetch occurrences and their nested dependencies."""
