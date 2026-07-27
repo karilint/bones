@@ -90,28 +90,28 @@ class ResponseAdmin(BonesHistoryAdmin):
     def get_form(self,request,obj=None,change=False,**kwargs):
         base=super().get_form(request,obj,change,**kwargs)
         class OptionAnswerForm(base):
-            def __init__(form,*args,**form_kwargs):
+            def __init__(self,*args,**form_kwargs):
                 super().__init__(*args,**form_kwargs)
-                instance=form.instance; options=[]
+                instance=self.instance; options=[]
                 if instance and instance.question_id:
                     options=list(DataTypeOption.objects.filter(data_type_id=instance.question.data_type_id).order_by("code"))
-                form._answer_options={str(option.code):option for option in options}
+                self._answer_options={str(option.code):option for option in options}
                 if options:
                     choices=[("","---------")]+[(str(x.code),f"{x.code} — {x.text}") for x in options]
-                    form.fields["answer_option"].choices=choices; form.fields["answer_option"].widget=forms.Select(choices=choices)
-                    form.initial["answer_option"]=str(instance.response_code or "")
-                    form.fields["response_code"].widget=forms.HiddenInput(); form.fields["response"].widget=forms.HiddenInput()
+                    self.fields["answer_option"].choices=choices; self.fields["answer_option"].widget=forms.Select(choices=choices)
+                    self.initial["answer_option"]=str(instance.response_code or "")
+                    self.fields["response_code"].widget=forms.HiddenInput(); self.fields["response"].widget=forms.HiddenInput()
                 else:
-                    form.fields["answer_option"].widget=forms.HiddenInput()
-                    form.fields["answer_option"].help_text="No configured options; edit the response fields below."
-            def clean(form):
+                    self.fields["answer_option"].widget=forms.HiddenInput()
+                    self.fields["answer_option"].help_text="No configured options; edit the response fields below."
+            def clean(self):
                 cleaned=super().clean()
-                if form._answer_options:
+                if self._answer_options:
                     selected=cleaned.get("answer_option"); skipped=cleaned.get("skipped",False)
-                    if not selected and not skipped: form.add_error("answer_option","Select an answer or mark the response as skipped.")
+                    if not selected and not skipped: self.add_error("answer_option","Select an answer or mark the response as skipped.")
                     elif selected:
-                        option=form._answer_options.get(str(selected))
-                        if option is None: form.add_error("answer_option","Select a configured answer.")
+                        option=self._answer_options.get(str(selected))
+                        if option is None: self.add_error("answer_option","Select a configured answer.")
                         else: cleaned["response_code"]=option.code; cleaned["response"]=option.text or ""
                     else: cleaned["response_code"]=""; cleaned["response"]=""
                 return cleaned

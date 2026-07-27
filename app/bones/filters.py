@@ -7,7 +7,7 @@ wire django-filter into W3.CSS table archetypes.
 from __future__ import annotations
 
 import json
-from typing import Iterable, Tuple
+from typing import Iterable, Tuple, cast
 
 import django_filters
 from django import forms
@@ -112,18 +112,20 @@ class FilteredListViewMixin:
     filterset = None
     filter_error = None
 
-    def get_filterset_class(self):
+    def get_filterset_class(self) -> type[django_filters.FilterSet]:
         if self.filterset_class is None:
             raise ImproperlyConfigured("filterset_class must be set")
-        return self.filterset_class
+        return cast(type[django_filters.FilterSet], self.filterset_class)
 
     def get_filterset(self, *, queryset):
         filterset_class = self.get_filterset_class()
         try:
+            # pylint: disable=not-callable
             filterset = filterset_class(
                 data=self.request.GET or None,
                 queryset=queryset,
             )
+            # pylint: enable=not-callable
         except (DatabaseError, ImproperlyConfigured) as exc:
             self.filter_error = exc
             return None
