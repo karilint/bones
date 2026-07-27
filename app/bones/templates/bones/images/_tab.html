@@ -1,0 +1,24 @@
+{% load i18n %}
+<section class="w3-section" aria-labelledby="images-heading">
+  <header><h3 id="images-heading" class="w3-large"><span class="fa-solid fa-images" aria-hidden="true"></span> {% trans "Images" %}</h3></header>
+  {% if entity_images %}
+    <div class="w3-row-padding">
+      {% for image in entity_images %}
+        <article class="w3-col s12 m6 l4 w3-margin-bottom">
+          <div class="w3-card w3-padding">
+            <a href="{% url 'bones:image_file' image.pk 'original' %}" target="_blank" rel="noopener">
+              <img src="{% url 'bones:image_file' image.pk 'thumbnail' %}" alt="{{ image.alt_text|default:image.generated_alt_text }}" class="bones-image-thumbnail">
+            </a>
+            <p class="w3-small w3-text-grey">{{ image.uploaded_at }} · {{ image.uploaded_by }}</p>
+            {% if request.user == image.uploaded_by or perms.bones.delete_entityimage %}
+              <form method="post" action="{% url 'bones:image_delete' image.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}#images"><input type="hidden" name="entity_type" value="{{ image_entity_type }}"><input type="hidden" name="entity_id" value="{{ image_entity_id }}"><button class="w3-button w3-small w3-red" type="submit" onclick="return confirm('{% trans "Remove this image from this page? The file is deleted only when no other links remain." %}')"><span class="fa-solid fa-unlink" aria-hidden="true"></span> {% trans "Remove link" %}</button></form>
+            {% endif %}
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  {% else %}<p class="w3-text-grey">{% trans "No images have been uploaded." %}</p>{% endif %}
+  {% if can_upload_images %}
+    <form method="post" enctype="multipart/form-data" action="{% url 'bones:image_upload' image_entity_type image_entity_id %}" class="w3-card w3-padding w3-margin-top">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}#images">{{ image_upload_form.as_p }}<button type="submit" class="w3-button w3-blue"><span class="fa-solid fa-upload" aria-hidden="true"></span> {% trans "Upload image" %}</button></form>
+  {% endif %}
+</section>

@@ -11,7 +11,7 @@ from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import DetailView, TemplateView
 
-from ..models import CompletedOccurrence, CompletedTransect, CompletedWorkflow, Question
+from ..models import CompletedOccurrence, CompletedTransect, CompletedWorkflow, EntityImage, Question
 from .detail import format_value, safe_reverse
 from .mixins import BonesAuthMixin
 
@@ -59,6 +59,12 @@ class HistoryIndexView(BonesAuthMixin, TemplateView):
                 description=_("Audit updates to survey questions and configuration."),
                 icon="fa-solid fa-circle-question",
                 url=safe_reverse("bones:history:questions"),
+            ),
+            HistoryLink(
+                label=_("Images"),
+                description=_("Review image uploads, metadata changes, and deletions."),
+                icon="fa-solid fa-images",
+                url=safe_reverse("bones:history:images"),
             ),
         ]
 
@@ -552,3 +558,60 @@ class QuestionHistoryEntryView(HistoryEntryDetailView):
     detail_route_name = "history:question_entry"
     record_route_name = "history:question_record"
     object_detail_route_name = "templates:question_detail"
+
+
+class EntityImageHistoryAccessMixin:
+    """Restrict image audit metadata using the protected-image permissions."""
+
+    model = EntityImage
+    entity_label = _("Image")
+    entity_plural_label = _("Image history")
+    page_icon = "fa-solid fa-images"
+    intro_text = _("Audit image uploads, metadata changes, bulk imports, and deletions.")
+    list_route_name = "history:images"
+    detail_route_name = "history:image_entry"
+    record_route_name = "history:image_record"
+    object_detail_route_name = None
+
+    def get_allowed_entity_types(self):
+        permissions = {
+            "transect": "bones.view_completedtransect",
+            "occurrence": "bones.view_completedoccurrence",
+            "instance": "bones.view_completedworkflow",
+        }
+        return [kind for kind, permission in permissions.items() if self.request.user.has_perm(permission)]
+
+    def get_history_queryset(self):
+        return (
+            EntityImage.history.select_related("history_user")
+            .filter(entity_type__in=self.get_allowed_entity_types())
+            .order_by("-history_date")
+        )
+
+    def get_permission_required(self):
+        return ("bones.view_entityimage",)
+
+
+class EntityImageHistoryListView(EntityImageHistoryAccessMixin, HistoryTimelineView):
+    pass
+
+
+class EntityImageHistoryRecordView(EntityImageHistoryAccessMixin, ObjectHistoryTimelineView):
+    def get_object(self, queryset=None):
+        entry = self.get_history_queryset().filter(id=self.kwargs["pk"]).first()
+        if entry is None:
+            raise Http404
+        return entry.instance
+
+    def get_history_queryset(self):
+        return super().get_history_queryset().filter(id=self.kwargs["pk"])
+
+
+class EntityImageHistoryEntryView(EntityImageHistoryAccessMixin, HistoryEntryDetailView):
+    def get_queryset(self):
+        queryset = self.get_history_queryset().filter(id=self.kwargs["pk"])
+        latest = queryset.first()
+        if latest is None:
+            raise Http404
+        self.parent_object = latest.instance
+        return queryset

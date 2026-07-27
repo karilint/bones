@@ -1,18 +1,16 @@
 #!/bin/sh
+set -e
 
-# wait until connection to mariadb is successful
-echo "CHECKING DATABASE CONNECTION"
-python manage.py shell < ./scripts/check_db_connection.py || exit
+echo "Checking SQL Server connection"
+python manage.py shell < ./scripts/check_db_connection.py
 
-echo 
-echo "RUNNING: MAKEMIGRATIONS & MIGRATE"
-python manage.py makemigrations
-python manage.py migrate
+echo "Applying database migrations"
+python manage.py migrate --no-input
 
-echo
-echo "INITIALIZING DATABASE"
-python manage.py shell < ./scripts/initialize.py
+if [ "${INITIALIZE_APP:-0}" = "1" ]; then
+    echo "Initializing application data"
+    python manage.py shell < ./scripts/initialize.py
+fi
 
-echo
-echo "STARTING DEVELOPMENT SERVER"
-python manage.py runserver 0.0.0.0:8000
+echo "Starting Django development server"
+exec python manage.py runserver 0.0.0.0:8000

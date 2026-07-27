@@ -1,9 +1,3 @@
-{#
-    Render the primary navigation bar. Expects a ``navigation_sections`` iterable made up of
-    dictionaries with ``label``, ``icon`` (Font Awesome classes), ``url`` (optional), and
-    ``children`` (optional list of child dictionaries containing ``label``/``url`` pairs).
-    When no navigation data is provided, a placeholder is displayed so the layout remains stable.
-#}
 <div class="w3-bar w3-white w3-small w3-hide-small">
     {% if navigation_sections %}
         {% for section in navigation_sections %}

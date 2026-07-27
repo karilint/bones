@@ -192,6 +192,8 @@ class CompletedTransectInfo(models.Model):
         null=True,
     )
 
+    history = HistoricalRecords()
+
     class Meta:
         managed = False
         db_table = "CompletedTransectsInfo"
@@ -224,6 +226,8 @@ class CompletedTransectTrack(models.Model):
     is_occurrence = models.BooleanField(db_column="isOccurrence")
     is_turn_point = models.BooleanField(db_column="isTurnPoint")
     is_end = models.BooleanField(db_column="isEnd")
+
+    history = HistoricalRecords()
 
     class Meta:
         managed = False
@@ -332,6 +336,8 @@ class CompletedOccurrenceInfo(models.Model):
         null=True,
     )
 
+    history = HistoricalRecords()
+
     class Meta:
         managed = False
         db_table = "CompletedOccurrencesInfo"
@@ -382,7 +388,7 @@ class CompletedWorkflow(models.Model):
 
 
 class CompletedResponse(models.Model):
-    id = models.AutoField(db_column="ID", primary_key=True)
+    id = models.IntegerField(db_column="ID", primary_key=True)
     occurrence = models.ForeignKey(
         CompletedOccurrence,
         models.DO_NOTHING,
@@ -427,6 +433,8 @@ class CompletedResponse(models.Model):
     )
 
     objects = CompletedResponseManager()
+
+    history = HistoricalRecords()
 
     class Meta:
         managed = False

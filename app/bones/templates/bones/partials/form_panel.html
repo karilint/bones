@@ -1,4 +1,3 @@
-{# Render a W3.CSS styled form. Requires form, submit_label, form_enctype, form_method. #}
 <section class="w3-section">
     <form method="{{ form_method|default:'post' }}"{% if form_enctype %} enctype="{{ form_enctype }}"{% endif %} class="w3-card w3-white">
         <div class="w3-container w3-padding">

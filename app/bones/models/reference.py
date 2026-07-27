@@ -46,6 +46,8 @@ class DataLogFile(models.Model):
         null=True,
     )
 
+    history = HistoricalRecords()
+
     class Meta:
         managed = False
         db_table = "DataLogFiles"
@@ -73,6 +75,8 @@ class DataType(models.Model):
     )
 
     objects = DataTypeManager()
+
+    history = HistoricalRecords()
 
     class Meta:
         managed = False
@@ -104,6 +108,8 @@ class DataTypeOption(models.Model):
         blank=True,
         null=True,
     )
+
+    history = HistoricalRecords(excluded_fields=["id"])
 
     class Meta:
         managed = False
@@ -143,6 +149,8 @@ class ProjectConfig(models.Model):
         db_column="transectsFile",
         db_collation="SQL_Latin1_General_CP1_CI_AS",
     )
+
+    history = HistoricalRecords()
 
     class Meta:
         managed = False
@@ -223,6 +231,8 @@ class TransectDataLog(models.Model):
         blank=True,
         null=True,
     )
+
+    history = HistoricalRecords()
 
     class Meta:
         managed = False

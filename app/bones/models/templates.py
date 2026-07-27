@@ -1,5 +1,6 @@
 """Template entities used to seed completed work."""
 from django.db import models
+from simple_history.models import HistoricalRecords
 
 
 class TemplateWorkflowQuerySet(models.QuerySet):
@@ -48,6 +49,8 @@ class TemplateWorkflow(models.Model):
 
     objects = TemplateWorkflowManager()
 
+    history = HistoricalRecords()
+
     class Meta:
         managed = False
         db_table = "TemplateWorkflows"
@@ -89,6 +92,8 @@ class TemplateTransect(models.Model):
     )
 
     objects = TemplateTransectManager()
+
+    history = HistoricalRecords()
 
     class Meta:
         managed = False

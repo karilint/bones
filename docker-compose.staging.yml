@@ -9,7 +9,8 @@ services:
       - 8000:8000
     command: sh -c ./scripts/entrypoint.prod.sh
     volumes:
-      - static:/vol/web
+      - static:/vol/web/static
+      - media:/vol/web/media
     env_file:
       - ./.env
 
@@ -20,7 +21,7 @@ services:
       - 80:80
       - 443:443
     volumes:
-      - static:/vol/web
+      - static:/vol/web/static
       - ./nginx/certbot/www:/var/www/certbot/:ro
       - ./nginx/certbot/conf:/etc/nginx/ssl/:ro
     environment:
@@ -61,3 +62,4 @@ services:
 
 volumes:
   static: null
+  media: null

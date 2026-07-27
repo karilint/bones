@@ -1,0 +1,25 @@
+{% extends "bones/base.html" %}
+{% load i18n %}
+
+{% block title %}{{ page_title }} - Bones{% endblock %}
+
+{% block breadcrumbs %}
+    {% include "bones/partials/breadcrumbs.html" %}
+{% endblock %}
+
+{% block main %}
+<section class="w3-section">
+    <header class="w3-margin-bottom">
+        <h2 class="w3-xxlarge w3-margin-bottom">
+            <span class="fa-fw {{ page_icon }}" aria-hidden="true"></span>
+            {{ page_title }}
+        </h2>
+        <p class="w3-text-grey">{{ intro_text }}</p>
+        <a href="{{ list_url }}" class="w3-button w3-border w3-round w3-white">
+            <span class="fa-solid fa-arrow-left" aria-hidden="true"></span>
+            {% trans "Back to completed transects" %}
+        </a>
+    </header>
+    {% include "bones/maps/_tab.html" %}
+</section>
+{% endblock %}

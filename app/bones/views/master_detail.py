@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 from typing import Any, Iterable, Mapping, Sequence
-from urllib.parse import urlencode
 
 from django.db import DatabaseError
+from django.db.models import Count, Prefetch
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import DetailView
 
@@ -15,6 +15,8 @@ from .detail import (
     format_value,
     safe_reverse,
 )
+from ..image_views import image_context
+from ..maps import map_context
 from ..models import CompletedOccurrence, CompletedTransect
 from .mixins import BonesAuthMixin
 
@@ -125,11 +127,22 @@ class CompletedTransectDetailView(BonesMasterDetailView):
     tablist_label = _("Transect detail navigation")
 
     def get_queryset(self):
+        # Load occurrence summaries rather than every nested response/workflow.
+        occurrence_summaries = (
+            CompletedOccurrence.objects.with_details()
+            .annotate(
+                response_count=Count("responses", distinct=True),
+                workflow_count=Count("workflows", distinct=True),
+            )
+            .order_by("occurrence_number", "pk")
+        )
         return (
             CompletedTransect.objects.select_related("transect_template")
-            .with_occurrences()
-            .with_details()
-            .prefetch_related("track_points")
+            .annotate(track_point_count=Count("track_points", distinct=True))
+            .prefetch_related(
+                Prefetch("occurrences", queryset=occurrence_summaries),
+                "details",
+            )
         )
 
     def get_extra_actions(self) -> Iterable[Mapping[str, Any]]:
@@ -219,6 +232,8 @@ class CompletedTransectDetailView(BonesMasterDetailView):
     def get_occurrence_table(self) -> tuple[list[dict[str, Any]], list[list[dict[str, Any]]]]:
         headers = [
             {"label": _("Occurrence")},
+            {"label": _("Taxon")},
+            {"label": _("Taxon Guess")},
             {"label": _("State")},
             {"label": _("Started")},
             {"label": _("Ended")},
@@ -229,26 +244,61 @@ class CompletedTransectDetailView(BonesMasterDetailView):
         occurrences = getattr(self.object, "occurrences", None)
         occurrence_entries = occurrences.all() if hasattr(occurrences, "all") else []
         for occurrence in occurrence_entries:
+            detail_entries = self._as_list(getattr(occurrence, "details", None))
             rows.append(
                 [
                     {
                         "value": _( "Occurrence {number}").format(number=occurrence.occurrence_number),
                         "url": safe_reverse("occurrences:detail", kwargs={"pk": occurrence.pk}),
                     },
+                    {
+                        "value": format_value(
+                            self._occurrence_detail_response(
+                                detail_entries, "Pre", "Taxon"
+                            )
+                        )
+                    },
+                    {
+                        "value": format_value(
+                            self._occurrence_detail_response(
+                                detail_entries, "Post", "Taxon Guess?"
+                            )
+                        )
+                    },
                     {"value": format_value(occurrence.state)},
                     {"value": format_datetime(occurrence.recording_start_time)},
                     {"value": format_datetime(occurrence.recording_end_time)},
                     {
-                        "value": len(self._as_list(getattr(occurrence, "responses", None))),
+                        "value": self._related_count(occurrence, "response_count", "responses"),
                         "classes": "w3-center",
                     },
                     {
-                        "value": len(self._as_list(getattr(occurrence, "workflows", None))),
+                        "value": self._related_count(occurrence, "workflow_count", "workflows"),
                         "classes": "w3-center",
                     },
                 ]
             )
         return headers, rows
+
+    @classmethod
+    def _related_count(cls, occurrence: Any, annotation: str, relation: str) -> int:
+        value = getattr(occurrence, annotation, None)
+        if value is not None:
+            return int(value)
+        return len(cls._as_list(getattr(occurrence, relation, None)))
+
+    @staticmethod
+    def _occurrence_detail_response(
+        details: Iterable[Any], phase: str, question: str
+    ) -> Any:
+        for detail in details:
+            if (
+                getattr(detail, "pre_or_post", "").casefold() == phase.casefold()
+                and getattr(detail, "question_text", "").casefold()
+                == question.casefold()
+            ):
+                return getattr(detail, "response", None)
+        return None
 
     def get_track_point_table(self) -> tuple[list[dict[str, Any]], list[list[dict[str, Any]]]]:
         headers = [
@@ -296,8 +346,15 @@ class CompletedTransectDetailView(BonesMasterDetailView):
                 "template": "bones/completed_transects/_overview.html",
             },
             {
+                "id": "map",
+                "label": _("Map"),
+                "icon": "fa-solid fa-map-location-dot",
+                "active": False,
+                "template": "bones/maps/_tab.html",
+            },
+            {
                 "id": "related",
-                "label": _("Related items"),
+                "label": _("Occurrences"),
                 "icon": "fa-solid fa-layer-group",
                 "active": False,
                 "template": "bones/completed_transects/_related.html",
@@ -309,13 +366,16 @@ class CompletedTransectDetailView(BonesMasterDetailView):
                 "active": False,
                 "template": "bones/completed_transects/_history.html",
             },
+            {
+                "id": "images", "label": _("Images"), "icon": "fa-solid fa-images",
+                "active": False, "template": "bones/images/_tab.html",
+            },
         ]
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         info_headers, info_rows = self.get_info_table()
         occurrence_headers, occurrence_rows = self.get_occurrence_table()
-        track_headers, track_rows = self.get_track_point_table()
         history_entries = self.get_history_entries()
         context.update(
             {
@@ -324,11 +384,19 @@ class CompletedTransectDetailView(BonesMasterDetailView):
                 "transect_info_rows": info_rows,
                 "transect_occurrence_headers": occurrence_headers,
                 "transect_occurrence_rows": occurrence_rows,
-                "transect_track_headers": track_headers,
-                "transect_track_rows": track_rows,
+                "transect_track_point_count": getattr(self.object, "track_point_count", None),
                 "transect_history_entries": history_entries,
                 "transect_history_error": self.history_error,
             }
+        )
+        context.update(image_context("transect", self.object.pk, self.request.user))
+        context.update(
+            map_context(
+                safe_reverse(
+                    "bones:transects:map_data", kwargs={"pk": self.object.pk}
+                ),
+                title=_("Transect map"),
+            )
         )
         return context
 
@@ -584,14 +652,13 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
                 response_entries,
                 instance_number=instance_number,
             )
-            url: str | None = None
-            if base_url and occurrence_pk is not None and instance_number is not None:
-                query = urlencode({
-                    "occurrence": occurrence_pk,
+            url = safe_reverse(
+                "bones:occurrences:instance_detail",
+                kwargs={
+                    "occurrence_pk": occurrence_pk,
                     "instance_number": instance_number,
-                })
-                url = f"{base_url}?{query}"
-
+                },
+            )
             summaries.append(
                 {
                     "number": instance_number,
@@ -621,8 +688,15 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
                 "template": "bones/completed_occurrences/_overview.html",
             },
             {
+                "id": "map",
+                "label": _("Map"),
+                "icon": "fa-solid fa-map-location-dot",
+                "active": False,
+                "template": "bones/maps/_tab.html",
+            },
+            {
                 "id": "related",
-                "label": _("Related items"),
+                "label": _("Instances"),
                 "icon": "fa-solid fa-layer-group",
                 "active": False,
                 "template": "bones/completed_occurrences/_related.html",
@@ -633,6 +707,10 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
                 "icon": "fa-solid fa-clock-rotate-left",
                 "active": False,
                 "template": "bones/completed_occurrences/_history.html",
+            },
+            {
+                "id": "images", "label": _("Images"), "icon": "fa-solid fa-images",
+                "active": False, "template": "bones/images/_tab.html",
             },
         ]
 
@@ -661,5 +739,14 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
                 "occurrence_history_entries": history_entries,
                 "occurrence_history_error": self.history_error,
             }
+        )
+        context.update(image_context("occurrence", self.object.pk, self.request.user))
+        context.update(
+            map_context(
+                safe_reverse(
+                    "bones:occurrences:map_data", kwargs={"pk": self.object.pk}
+                ),
+                title=_("Occurrence map"),
+            )
         )
         return context

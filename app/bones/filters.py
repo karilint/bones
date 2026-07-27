@@ -6,6 +6,7 @@ wire django-filter into W3.CSS table archetypes.
 """
 from __future__ import annotations
 
+import json
 from typing import Iterable, Tuple
 
 import django_filters
@@ -39,7 +40,8 @@ from .models import (
 )
 
 DATE_INPUT_ATTRS = {"type": "date"}
-OLD_RESERVE_QUESTION_TEXT = "On old reserve?"
+NOTE_FILTER_PREFIX = "note_"
+NOTE_FILTER_MAX_ROWS = 10
 
 
 def _state_choices(queryset: Iterable[str]) -> Tuple[Tuple[str, str], ...]:
@@ -56,6 +58,32 @@ def _info_choices(
 
     unique_values = sorted({value for value in queryset if value})
     return (("", empty_label), *[(value, value) for value in unique_values])
+
+
+def _info_multi_choices(queryset: Iterable[str]) -> Tuple[Tuple[str, str], ...]:
+    """Return normalized choices without an empty option for multi-select fields."""
+
+    return tuple(
+        (value, value) for value in sorted({value for value in queryset if value})
+    )
+
+
+def _note_key(phase: str, question: str) -> str:
+    """Encode a phase/question pair for use as a stable GET value."""
+
+    return json.dumps([phase, question], separators=(",", ":"))
+
+
+def _parse_note_key(value: str) -> tuple[str, str]:
+    """Decode a phase/question GET value into filter parts."""
+
+    try:
+        phase, question = json.loads(value)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return "", ""
+    if not isinstance(phase, str) or not isinstance(question, str):
+        return "", ""
+    return phase, question
 
 
 class Select2FilterSetMixin:
@@ -192,8 +220,6 @@ class FilteredListViewMixin:
 class CompletedTransectFilterSet(Select2FilterSetMixin, django_filters.FilterSet):
     """Filters for completed transects."""
 
-    select2_fields = ("transect_template",)
-
     start_date = django_filters.DateFilter(
         field_name="start_time",
         lookup_expr="gte",
@@ -218,25 +244,15 @@ class CompletedTransectFilterSet(Select2FilterSetMixin, django_filters.FilterSet
         choices=(),
         empty_label=None,
     )
-    old_reserve_response = django_filters.ChoiceFilter(
-        method="filter_old_reserve_response",
-        label=OLD_RESERVE_QUESTION_TEXT,
-        choices=(),
-        empty_label=None,
-    )
-    transect_template = django_filters.ModelChoiceFilter(
-        field_name="transect_template",
-        queryset=TemplateTransect.objects.all(),
-        label="Template transect",
-        widget=TemplateTransectSelect2Widget(
-            attrs=select2_widget_attrs("Search template transects")
-        ),
+    transect = django_filters.CharFilter(
+        field_name="name",
+        lookup_expr="icontains",
+        label="Transect",
     )
 
     class Meta:
         model = CompletedTransect
-        fields = ["state", "phase", "old_reserve_response", "transect_template"]
-
+        fields = []
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         try:
@@ -259,23 +275,8 @@ class CompletedTransectFilterSet(Select2FilterSetMixin, django_filters.FilterSet
         self.filters["phase"].field.choices = phase_choices
         self.filters["phase"].field.widget.attrs.setdefault("class", "w3-select")
 
-        try:
-            old_reserve_values = (
-                CompletedTransectInfo.objects.filter(
-                    question_text__iexact=OLD_RESERVE_QUESTION_TEXT
-                )
-                .values_list("response", flat=True)
-            )
-            old_reserve_choices = _info_choices(
-                old_reserve_values, "All responses"
-            )
-        except (DatabaseError, ImproperlyConfigured):
-            old_reserve_choices = _info_choices((), "All responses")
-        self.filters["old_reserve_response"].extra["choices"] = old_reserve_choices
-        self.filters["old_reserve_response"].field.choices = old_reserve_choices
-        self.filters["old_reserve_response"].field.widget.attrs.setdefault(
-            "class", "w3-select"
-        )
+        self.note_filter_choices = self._build_note_filter_choices()
+        self.note_filters = self._parse_note_filters()
 
     def filter_phase(self, queryset, name, value):
         """Filter transects by pre/post phase captured in transect details."""
@@ -284,15 +285,118 @@ class CompletedTransectFilterSet(Select2FilterSetMixin, django_filters.FilterSet
             return queryset
         return queryset.filter(details__pre_or_post=value).distinct()
 
-    def filter_old_reserve_response(self, queryset, name, value):
-        """Filter transects by the response to the old-reserve question."""
+    def filter_queryset(self, queryset):
+        queryset = super().filter_queryset(queryset)
+        for note_filter in self.note_filters:
+            criteria = {}
+            phase = note_filter["phase"]
+            question = note_filter["question"]
+            responses = note_filter["responses"]
 
-        if not value:
-            return queryset
-        return queryset.filter(
-            details__question_text__iexact=OLD_RESERVE_QUESTION_TEXT,
-            details__response=value,
-        ).distinct()
+            if phase:
+                criteria["details__pre_or_post"] = phase
+            if question:
+                criteria["details__question_text"] = question
+            if responses:
+                criteria["details__response__in"] = responses
+            if criteria:
+                queryset = queryset.filter(**criteria)
+        if self.note_filters:
+            queryset = queryset.distinct()
+        return queryset
+
+    @property
+    def note_filter_form_rows(self):
+        """Return rows for rendering the repeated transect-note filter UI."""
+
+        rows = []
+        for row in self.note_filters:
+            rows.append(
+                {
+                    **row,
+                    "response_choices": self.note_filter_choices["response_map"].get(
+                        row["note_key"], ()
+                    ),
+                }
+            )
+        if not rows:
+            rows.append(
+                {
+                    "index": 0,
+                    "note_key": "",
+                    "phase": "",
+                    "question": "",
+                    "responses": [],
+                    "response_choices": (),
+                }
+            )
+        return rows
+
+    def _build_note_filter_choices(self):
+        try:
+            detail_values = CompletedTransectInfo.objects.values_list(
+                "pre_or_post", "question_text", "response"
+            )
+        except (DatabaseError, ImproperlyConfigured):
+            detail_values = ()
+
+        note_pairs = {}
+        response_map = {}
+        for phase, question, response in detail_values:
+            if not phase or not question:
+                continue
+            key = _note_key(phase, question)
+            note_pairs[key] = f"{phase} / {question}"
+            if response:
+                response_map.setdefault(key, set()).add(response)
+
+        return {
+            "notes": (
+                ("", "Any phase/question"),
+                *tuple(
+                    (key, label)
+                    for key, label in sorted(note_pairs.items(), key=lambda item: item[1])
+                ),
+            ),
+            "response_map": {
+                key: tuple((value, value) for value in sorted(values))
+                for key, values in response_map.items()
+            },
+        }
+
+    def _parse_note_filters(self):
+        if not self.data:
+            return []
+
+        rows = []
+        for index in range(NOTE_FILTER_MAX_ROWS):
+            prefix = f"{NOTE_FILTER_PREFIX}{index}_"
+            note_key = self.data.get(f"{prefix}note", "").strip()
+            phase, question = _parse_note_key(note_key)
+            responses = self._getlist(f"{prefix}response")
+            responses = [value.strip() for value in responses if value.strip()]
+
+            if phase or question or responses:
+                rows.append(
+                    {
+                        "index": index,
+                        "note_key": note_key,
+                        "phase": phase,
+                        "question": question,
+                        "responses": responses,
+                    }
+                )
+        return rows
+
+    def _getlist(self, key):
+        if hasattr(self.data, "getlist"):
+            return self.data.getlist(key)
+        value = self.data.get(key, [])
+        if isinstance(value, (list, tuple)):
+            return value
+        if value:
+            return [value]
+        return []
 
 
 class CompletedOccurrenceFilterSet(Select2FilterSetMixin, django_filters.FilterSet):

@@ -1,0 +1,28 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% block content %}
+  <div id="content-main">
+    <div class="module">
+      <h2>{% trans "Instance being deleted" %}</h2>
+      <table>
+        <tr><th>Template transect</th><td>{{ summary.occurrence.transect.transect_template.name }}</td></tr>
+        <tr><th>Transect UID</th><td>{{ summary.occurrence.transect_id }}</td></tr>
+        <tr><th>Occurrence</th><td>{{ summary.occurrence.occurrence_number }} (ID {{ summary.occurrence.pk }})</td></tr>
+        <tr><th>Instance</th><td>{{ summary.workflows.0.instance_number }}</td></tr>
+        <tr><th>Workflows</th><td>{{ summary.workflows|length }}</td></tr>
+        <tr><th>Responses</th><td>{{ summary.response_count }}</td></tr>
+        <tr><th>Image links</th><td>{{ summary.image_links|length }}</td></tr>
+        <tr><th>Image files archived</th><td>{{ summary.exclusive_image_count }}; shared files remain available to other instances</td></tr>
+      </table>
+    </div>
+    <form method="post">{% csrf_token %}
+      {{ form.non_field_errors }}
+      <fieldset class="module aligned">
+        {% for field in form %}
+          <div class="form-row"><div>{{ field.errors }}{{ field.label_tag }} {{ field }}{% if field.help_text %}<div class="help">{{ field.help_text }}</div>{% endif %}</div></div>
+        {% endfor %}
+      </fieldset>
+      <div class="submit-row"><input type="submit" value="{% trans 'Delete complete instance' %}" class="deletelink"></div>
+    </form>
+  </div>
+{% endblock %}

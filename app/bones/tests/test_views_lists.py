@@ -168,7 +168,10 @@ class CompletedTransectListViewTests(SimpleTestCase):
 
         rows = view.get_table_rows([DummyTransect()])
 
-        self.assertEqual(rows[0][5]["value"], 5)
+        self.assertEqual(rows[0][4]["value"], 5)
+        self.assertNotIn(
+            "Template", [header["label"] for header in view.get_table_headers()]
+        )
         view.get_detail_url.assert_called_once()
         view.get_action_buttons.assert_called_once()
 

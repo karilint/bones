@@ -1,7 +1,164 @@
 {% extends "bones/base.html" %}
+{% load i18n %}
 
-{% block title %}{{ page_title }} • Bones{% endblock %}
+{% block title %}{{ page_title }} - Bones{% endblock %}
+
+{% block head_extra %}
+    {{ block.super }}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
+{% endblock %}
 
 {% block main %}
+    <p>
+        <a href="{% url 'bones:transects:map' %}" class="w3-button w3-blue w3-round">
+            <span class="fa-solid fa-map-location-dot" aria-hidden="true"></span>
+            {% trans "View all transects on map" %}
+        </a>
+    </p>
     {% include "bones/partials/list_page.html" %}
+{% endblock %}
+
+{% block scripts %}
+    {{ block.super }}
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script>
+        (function() {
+            const responseMapElement = document.getElementById('transect-note-response-map');
+            const responseMap = responseMapElement ? JSON.parse(responseMapElement.textContent) : {};
+
+            function clearField(field) {
+                if (window.jQuery && window.jQuery.fn.select2) {
+                    window.jQuery(field).val(field.multiple ? [] : '').trigger('change');
+                } else if (field.multiple) {
+                    Array.from(field.options).forEach(option => option.selected = false);
+                } else {
+                    field.value = '';
+                }
+            }
+
+            function initializeSelect2(scope) {
+                if (!window.jQuery || !window.jQuery.fn.select2) {
+                    return;
+                }
+                window.jQuery(scope).find('.bones-select2').each(function() {
+                    const element = window.jQuery(this);
+                    if (element.data('select2')) {
+                        return;
+                    }
+                    element.select2({
+                        width: '100%',
+                        placeholder: element.data('placeholder') || '',
+                        allowClear: !element.prop('multiple')
+                    });
+                });
+            }
+
+            function setResponseChoices(row, selectedValues) {
+                const noteField = row.querySelector('[data-note-field="note"]');
+                const responseField = row.querySelector('[data-note-field="response"]');
+                if (!noteField || !responseField) {
+                    return;
+                }
+
+                const choices = responseMap[noteField.value] || [];
+                const selected = new Set(selectedValues || []);
+                responseField.innerHTML = '';
+                choices.forEach(function(choice) {
+                    const option = document.createElement('option');
+                    const value = Array.isArray(choice) ? choice[0] : choice.value;
+                    const label = Array.isArray(choice) ? choice[1] : choice.label;
+                    option.value = value;
+                    option.textContent = label;
+                    option.selected = selected.has(value);
+                    responseField.appendChild(option);
+                });
+
+                if (window.jQuery && window.jQuery.fn.select2) {
+                    window.jQuery(responseField).trigger('change');
+                }
+            }
+
+            function updateRowIndex(row, index) {
+                row.querySelectorAll('[data-note-field]').forEach(function(field) {
+                    const fieldName = field.getAttribute('data-note-field');
+                    const id = 'note_' + index + '_' + fieldName;
+                    field.name = id;
+                    field.id = id;
+                    clearField(field);
+                    const label = row.querySelector('label[for^="note_"][for$="_' + fieldName + '"]');
+                    if (label) {
+                        label.setAttribute('for', id);
+                    }
+                });
+                setResponseChoices(row, []);
+            }
+
+            const list = document.querySelector('[data-note-filter-list]');
+            const addButton = document.querySelector('[data-note-filter-add]');
+            if (!list || !addButton) {
+                return;
+            }
+
+            initializeSelect2(document);
+
+            function handleNoteChange(noteField) {
+                const row = noteField.closest('[data-note-filter-row]');
+                setResponseChoices(row, []);
+            }
+
+            list.addEventListener('change', function(event) {
+                const noteField = event.target.closest('[data-note-field="note"]');
+                if (noteField) {
+                    handleNoteChange(noteField);
+                }
+            });
+
+            if (window.jQuery) {
+                window.jQuery(list).on('change', '[data-note-field="note"]', function() {
+                    handleNoteChange(this);
+                });
+            }
+
+            addButton.addEventListener('click', function() {
+                const rows = list.querySelectorAll('[data-note-filter-row]');
+                const maxRows = Number(addButton.getAttribute('data-note-filter-max')) || 10;
+                if (rows.length >= maxRows) {
+                    return;
+                }
+
+                const clone = rows[rows.length - 1].cloneNode(true);
+                if (window.jQuery && window.jQuery.fn.select2) {
+                    window.jQuery(clone).find('.bones-select2').each(function() {
+                        const next = this.nextElementSibling;
+                        if (next && next.classList.contains('select2')) {
+                            next.remove();
+                        }
+                        window.jQuery(this)
+                            .removeClass('select2-hidden-accessible')
+                            .removeAttr('data-select2-id tabindex aria-hidden');
+                    });
+                }
+
+                updateRowIndex(clone, rows.length);
+                list.appendChild(clone);
+                initializeSelect2(clone);
+            });
+
+            list.addEventListener('click', function(event) {
+                const button = event.target.closest('[data-note-filter-remove]');
+                if (!button) {
+                    return;
+                }
+
+                const rows = list.querySelectorAll('[data-note-filter-row]');
+                const row = button.closest('[data-note-filter-row]');
+                if (rows.length === 1) {
+                    row.querySelectorAll('[data-note-field]').forEach(clearField);
+                    return;
+                }
+                row.remove();
+            });
+        })();
+    </script>
 {% endblock %}

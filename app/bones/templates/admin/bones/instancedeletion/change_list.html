@@ -1,0 +1,8 @@
+{% extends "admin/change_list.html" %}
+{% load i18n %}
+{% block object-tools-items %}
+  {% if perms.bones.delete_completed_instance %}
+    <li><a href="{{ find_instance_url }}" class="addlink">{% trans "Find and delete instance" %}</a></li>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}

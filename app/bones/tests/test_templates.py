@@ -21,3 +21,30 @@ class TemplateMarkupTests(SimpleTestCase):
         tabs_html = (self.templates_dir / "partials" / "tabs.html").read_text(encoding="utf-8")
         self.assertIn("role=\"tablist\"", tabs_html)
         self.assertIn("w3-bar", tabs_html)
+
+    def test_transect_note_filter_partial_uses_select2_multi_response(self):
+        partial_html = (
+            self.templates_dir / "partials" / "transect_note_filters.html"
+        ).read_text(encoding="utf-8")
+        self.assertIn("bones-select2", partial_html)
+        self.assertIn("data-note-filter-add", partial_html)
+        self.assertIn("multiple", partial_html)
+        self.assertIn("transect-note-response-map", partial_html)
+        self.assertIn("note_{{ row.index }}_note", partial_html)
+        self.assertIn("note_{{ row.index }}_response", partial_html)
+
+    def test_transect_list_binds_select2_change_for_note_filters(self):
+        list_html = (self.templates_dir / "completed_transect_list.html").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("window.jQuery(list).on('change'", list_html)
+        self.assertIn("handleNoteChange(this)", list_html)
+class MapInteractionAssetTests(SimpleTestCase):
+    def test_shared_map_script_enables_hover_popups(self):
+        from pathlib import Path
+        from django.conf import settings
+
+        script = Path(settings.BASE_DIR, "bones", "static", "bones", "js", "maps.js").read_text(encoding="utf-8")
+        self.assertIn('featureLayer.on("mouseover focus"', script)
+        self.assertIn("bindHoverPopup(featureLayer)", script)
+        self.assertIn("summary_line", script)

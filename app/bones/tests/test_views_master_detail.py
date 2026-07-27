@@ -33,7 +33,92 @@ class MasterDetailViewTests(SimpleTestCase):
         tabs = list(view.get_tabs())
         tab_ids = [tab["id"] for tab in tabs]
         self.assertIn("history", tab_ids)
+        self.assertIn("images", tab_ids)
+        self.assertIn("map", tab_ids)
+        self.assertEqual(
+            next(tab["label"] for tab in tabs if tab["id"] == "related"),
+            "Occurrences",
+        )
 
+    def test_completed_transect_occurrences_include_taxon_values(self):
+        class DummyManager:
+            def __init__(self, items):
+                self._items = items
+
+            def all(self):
+                return self._items
+
+        occurrence = SimpleNamespace(
+            pk=7,
+            occurrence_number=3,
+            state="Complete",
+            recording_start_time=None,
+            recording_end_time=None,
+            responses=[],
+            workflows=[],
+            details=DummyManager(
+                [
+                    SimpleNamespace(
+                        pre_or_post="Pre", question_text="Taxon", response="Bird"
+                    ),
+                    SimpleNamespace(
+                        pre_or_post="Post",
+                        question_text="Taxon Guess?",
+                        response="Robin",
+                    ),
+                ]
+            ),
+        )
+        view = CompletedTransectDetailView()
+        view.object = SimpleNamespace(occurrences=DummyManager([occurrence]))
+
+        headers, rows = view.get_occurrence_table()
+
+        self.assertEqual(
+            [header["label"] for header in headers][1:3],
+            ["Taxon", "Taxon Guess"],
+        )
+        self.assertEqual(
+            [cell["value"] for cell in rows[0]][1:3], ["Bird", "Robin"]
+        )
+    def test_completed_transect_occurrence_counts_use_annotations(self):
+        class UnexpectedRelationAccess:
+            def all(self):
+                raise AssertionError("Nested relation should not be loaded for a count")
+
+        occurrence = SimpleNamespace(
+            pk=7,
+            occurrence_number=3,
+            state="Complete",
+            recording_start_time=None,
+            recording_end_time=None,
+            response_count=12,
+            workflow_count=4,
+            responses=UnexpectedRelationAccess(),
+            workflows=UnexpectedRelationAccess(),
+            details=[],
+        )
+        view = CompletedTransectDetailView()
+        view.object = SimpleNamespace(
+            occurrences=SimpleNamespace(all=lambda: [occurrence])
+        )
+
+        headers, rows = view.get_occurrence_table()
+
+        labels = [header["label"] for header in headers]
+        self.assertEqual(rows[0][labels.index("Responses")]["value"], 12)
+        self.assertEqual(rows[0][labels.index("Workflows")]["value"], 4)
+    def test_completed_occurrence_tabs_include_images(self):
+        view = CompletedOccurrenceDetailView()
+        self.assertIn("images", [tab["id"] for tab in view.get_tabs()])
+        self.assertIn("map", [tab["id"] for tab in view.get_tabs()])
+    def test_completed_occurrence_related_tab_is_named_instances(self):
+        view = CompletedOccurrenceDetailView()
+        tabs = list(view.get_tabs())
+        self.assertEqual(
+            next(tab["label"] for tab in tabs if tab["id"] == "related"),
+            "Instances",
+        )
     def test_completed_occurrence_extra_actions_use_safe_reverse(self):
         view = CompletedOccurrenceDetailView()
         request = self.factory.get("/occurrences/1/")
@@ -135,11 +220,11 @@ class MasterDetailViewTests(SimpleTestCase):
 
         self.assertEqual(len(instance_one["response_rows"]), 2)
         self.assertEqual(len(instance_one["workflow_rows"]), 2)
-        self.assertEqual(instance_one["url"], "/workflows/?occurrence=42&instance_number=1")
+        self.assertEqual(instance_one["url"], "/workflows/")
 
         self.assertEqual(len(instance_two["response_rows"]), 1)
         self.assertEqual(len(instance_two["workflow_rows"]), 1)
-        self.assertEqual(instance_two["url"], "/workflows/?occurrence=42&instance_number=2")
+        self.assertEqual(instance_two["url"], "/workflows/")
 
         instance_one_question_order = [row[0]["value"] for row in instance_one["response_rows"]]
         self.assertEqual(instance_one_question_order, ["First question", "Second question"])

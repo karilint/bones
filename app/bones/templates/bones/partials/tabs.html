@@ -1,9 +1,3 @@
-{#
-    Accessible W3.CSS tab component. ``tabs`` should be an iterable of dictionaries with
-    ``id`` (unique DOM id), ``label``, optional ``icon`` classes, ``active`` boolean, and either
-    ``content`` (safe HTML) or ``template`` (path to include). The caller can also supply
-    ``tablist_label`` for screen readers.
-#}
 {% with tablist_label=tablist_label|default:'Section navigation' %}
 <div class="w3-bar w3-border-bottom" role="tablist" aria-label="{{ tablist_label }}">
     {% for tab in tabs %}
@@ -50,6 +44,17 @@
             target.classList.remove('w3-hide');
             trigger.classList.add('w3-border-bottom', 'w3-border-blue');
             trigger.setAttribute('aria-selected', 'true');
+            window.dispatchEvent(new CustomEvent('bones:tab-opened', {
+                detail: {tabId: tabId}
+            }));
         }
     }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const tabId = window.location.hash.replace(/^#/, '');
+        const trigger = tabId ? document.getElementById('tab-' + tabId) : null;
+        if (trigger) {
+            trigger.click();
+        }
+    });
 </script>
