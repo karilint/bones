@@ -1,8 +1,3 @@
-{#
-    Render a responsive filter form for list archetypes. Expects ``filter`` in the
-    context (a django-filter FilterSet) and the current ``request`` to build the
-    clear link. Widgets inherit W3.CSS utility classes from the FilteredListViewMixin.
-#}
 {% if filter_error %}
     <div class="w3-panel w3-pale-red w3-border w3-border-red">
         <p class="w3-margin-0">Filtering is temporarily unavailable. Please try again later.</p>
@@ -24,6 +19,9 @@
                 </div>
             {% endfor %}
         </div>
+        {% if filter_extra_template %}
+            {% include filter_extra_template %}
+        {% endif %}
         <div class="w3-margin-top">
             <button type="submit" class="w3-button w3-blue w3-margin-right">
                 <span class="fa fa-filter" aria-hidden="true"></span>

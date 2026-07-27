@@ -1,40 +1,27 @@
-version: '3.8'
-
 services:
   web:
-    build: ./app
+    build:
+      context: ./app
+    command: sh ./scripts/entrypoint.sh
     ports:
-      - 8000:8000
-      - 3000:3000
+      - "8000:8000"
+      - "3000:3000"
     volumes:
       - ./app:/src/app
+      - ./media:/vol/web/media
     env_file:
       - ./.env
-    depends_on:
-      - db
-
-  db:
-    image: mariadb
-    ports:
-      - 3306
     environment:
-      - MYSQL_DATABASE=${DB_NAME}
-      - MYSQL_USER=${DB_USER}
-      - MYSQL_PASSWORD=${DB_PASS}
-      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASS}
-    command:
-      - "--character-set-server=utf8mb4"
-    volumes:
-      - db:/var/lib/mysql
-
-  phpmyadmin:
-    image: phpmyadmin
-    ports:
-      - 8001:80
-    environment:
-      - PMA_HOST=${DB_HOST}
-      - PMA_USER=${DB_USER}
-      - PMA_PASSWORD=${DB_PASS}
-
-volumes:
-  db: null
+      MEDIA_ROOT: /vol/web/media
+      STATIC_ROOT: /vol/web/static
+      MSSQL_DRIVER: ODBC Driver 18 for SQL Server
+      INITIALIZE_APP: "0"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/accounts/login/', timeout=5)"]
+      interval: 15s
+      timeout: 8s
+      retries: 5
+      start_period: 45s

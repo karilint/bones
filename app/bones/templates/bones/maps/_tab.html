@@ -1,0 +1,36 @@
+{% load i18n %}
+<article class="w3-container w3-padding-16" aria-labelledby="map-heading">
+    <h2 id="map-heading" class="w3-xlarge w3-margin-top-0">
+        <span class="fa-solid fa-map-location-dot" aria-hidden="true"></span>
+        {{ map_title }}
+    </h2>
+    <p class="w3-small">
+        {% translate "The route and recorded locations are shown below. Invalid or missing coordinates are omitted." %}
+    </p>
+    {% if map_legend %}
+        <ul class="bones-map-legend" aria-label="{% trans 'Map legend' %}">
+            {% for item in map_legend %}
+                <li><span class="bones-map-legend-swatch" style="background-color: {{ item.color }}"></span>{{ item.label }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+    <p class="bones-map-status w3-panel w3-pale-blue" aria-live="polite">
+        {% translate "Open the Map tab to load map data." %}
+    </p>
+    <div
+        class="bones-map"
+        data-bones-map
+        data-map-url="{{ map_data_url }}"
+        data-leaflet-css-url="{{ map_leaflet_css_url }}"
+        data-leaflet-js-url="{{ map_leaflet_js_url }}"
+        data-tile-url="{{ map_tile_url }}"
+        data-tile-attribution="{{ map_tile_attribution }}"
+        data-tile-max-zoom="{{ map_tile_max_zoom }}"
+        aria-label="{{ map_title }}"
+    ></div>
+    <noscript>
+        <p class="w3-panel w3-pale-yellow">
+            {% translate "JavaScript is required to display the interactive map." %}
+        </p>
+    </noscript>
+</article>

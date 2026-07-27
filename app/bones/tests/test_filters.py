@@ -4,15 +4,17 @@ from unittest.mock import MagicMock, patch
 import django_filters
 from django.core.exceptions import ImproperlyConfigured
 from django.db import DatabaseError
+from django.http import QueryDict
 from django.test import RequestFactory, SimpleTestCase
 from django.views.generic import ListView
 
 from ..filters import (
     CompletedTransectFilterSet,
     FilteredListViewMixin,
-    OLD_RESERVE_QUESTION_TEXT,
     TemplateTransectFilterSet,
     _info_choices,
+    _info_multi_choices,
+    _note_key,
     _state_choices,
 )
 from ..models import CompletedTransect, TemplateTransect
@@ -69,6 +71,10 @@ class FilteredListViewMixinTests(SimpleTestCase):
             ["Post", "Pre"],
         )
 
+    def test_info_multi_choices_sorted_without_blank(self):
+        choices = _info_multi_choices(["Grassland", "", None, "Heath", "Grassland"])
+        self.assertEqual(choices, (("Grassland", "Grassland"), ("Heath", "Heath")))
+
     def test_filtered_list_view_populates_filterset(self):
         request = self.factory.get("/transects/?state=active")
         view = DummyListView()
@@ -120,15 +126,31 @@ class TemplateTransectFilterSetTests(SimpleTestCase):
 
 
 class CompletedTransectFilterSetTests(SimpleTestCase):
+    def test_filter_order_pairs_dates_and_filters_displayed_transect(self):
+        self.assertEqual(
+            list(CompletedTransectFilterSet.base_filters),
+            ["start_date", "end_date", "state", "phase", "transect"],
+        )
+        transect_filter = CompletedTransectFilterSet.base_filters["transect"]
+        self.assertEqual(transect_filter.field_name, "name")
+        self.assertEqual(transect_filter.label, "Transect")
+        self.assertEqual(transect_filter.lookup_expr, "icontains")
+        self.assertNotIn(
+            "transect_template", CompletedTransectFilterSet.base_filters
+        )
     @patch("bones.filters.CompletedTransectInfo.objects")
     @patch("bones.filters.CompletedTransect.objects")
-    def test_completed_transect_filterset_adds_phase_and_old_reserve_choices(
+    def test_completed_transect_filterset_adds_phase_and_note_choices(
         self, mock_transect_manager, mock_info_manager
     ):
-        old_reserve_queryset = MagicMock()
-        old_reserve_queryset.values_list.return_value = ["Yes", "No", "Yes"]
-        mock_info_manager.filter.return_value = old_reserve_queryset
-        mock_info_manager.values_list.return_value = ["Pre", "Post", "Pre"]
+        mock_info_manager.values_list.side_effect = [
+            ["Pre", "Post", "Pre"],
+            [
+                ("Pre", "OPC Vegetation", "Grassland"),
+                ("Pre", "OPC Vegetation", "Heath"),
+                ("Pre", "Transect physical habitat", "grass closed"),
+            ],
+        ]
         mock_transect_manager.values_list.return_value = ["Complete"]
 
         filterset = CompletedTransectFilterSet(
@@ -137,17 +159,27 @@ class CompletedTransectFilterSetTests(SimpleTestCase):
         )
 
         self.assertIn("phase", filterset.filters)
-        self.assertIn("old_reserve_response", filterset.filters)
+        self.assertNotIn("old_reserve_response", filterset.filters)
         self.assertEqual(
             list(filterset.filters["phase"].field.choices),
             [("", "All phases"), ("Post", "Post"), ("Pre", "Pre")],
         )
         self.assertEqual(
-            list(filterset.filters["old_reserve_response"].field.choices),
-            [("", "All responses"), ("No", "No"), ("Yes", "Yes")],
+            filterset.note_filter_choices["notes"],
+            (
+                ("", "Any phase/question"),
+                (_note_key("Pre", "OPC Vegetation"), "Pre / OPC Vegetation"),
+                (
+                    _note_key("Pre", "Transect physical habitat"),
+                    "Pre / Transect physical habitat",
+                ),
+            ),
         )
-        mock_info_manager.filter.assert_called_once_with(
-            question_text__iexact=OLD_RESERVE_QUESTION_TEXT
+        self.assertEqual(
+            filterset.note_filter_choices["response_map"][
+                _note_key("Pre", "OPC Vegetation")
+            ],
+            (("Grassland", "Grassland"), ("Heath", "Heath")),
         )
 
     def test_phase_filter_targets_transect_details_and_distincts(self):
@@ -163,22 +195,76 @@ class CompletedTransectFilterSetTests(SimpleTestCase):
         filtered.distinct.assert_called_once_with()
         self.assertEqual(result, "distinct-queryset")
 
-    def test_old_reserve_filter_targets_question_response_and_distincts(self):
-        filterset = CompletedTransectFilterSet.__new__(CompletedTransectFilterSet)
-        queryset = MagicMock()
-        filtered = MagicMock()
-        queryset.filter.return_value = filtered
-        filtered.distinct.return_value = "distinct-queryset"
-
-        result = filterset.filter_old_reserve_response(
-            queryset,
-            "old_reserve_response",
-            "Yes",
+    def test_note_filters_parse_indexed_rows_and_multiple_responses(self):
+        data = QueryDict(mutable=True)
+        data.update(
+            {
+                "note_0_note": _note_key("Pre", "OPC Vegetation"),
+                "note_1_note": _note_key("Pre", "Transect physical habitat"),
+            }
         )
+        data.setlist("note_0_response", ["Grassland", "Heath"])
+        data.setlist("note_1_response", ["grass closed"])
+
+        filterset = CompletedTransectFilterSet.__new__(CompletedTransectFilterSet)
+        filterset.data = data
+
+        self.assertEqual(
+            filterset._parse_note_filters(),
+            [
+                {
+                    "index": 0,
+                    "note_key": _note_key("Pre", "OPC Vegetation"),
+                    "phase": "Pre",
+                    "question": "OPC Vegetation",
+                    "responses": ["Grassland", "Heath"],
+                },
+                {
+                    "index": 1,
+                    "note_key": _note_key("Pre", "Transect physical habitat"),
+                    "phase": "Pre",
+                    "question": "Transect physical habitat",
+                    "responses": ["grass closed"],
+                },
+            ],
+        )
+
+    @patch("django_filters.FilterSet.filter_queryset")
+    def test_note_filters_chain_rows_and_or_responses(self, mock_base_filter):
+        filterset = CompletedTransectFilterSet.__new__(CompletedTransectFilterSet)
+        filterset.note_filters = [
+            {
+                "index": 0,
+                "phase": "Pre",
+                "question": "OPC Vegetation",
+                "responses": ["Grassland", "Heath"],
+            },
+            {
+                "index": 1,
+                "phase": "Pre",
+                "question": "Transect physical habitat",
+                "responses": ["grass closed"],
+            },
+        ]
+        queryset = MagicMock()
+        first_filtered = MagicMock()
+        second_filtered = MagicMock()
+        queryset.filter.return_value = first_filtered
+        first_filtered.filter.return_value = second_filtered
+        second_filtered.distinct.return_value = "distinct-queryset"
+        mock_base_filter.return_value = queryset
+
+        result = filterset.filter_queryset(queryset)
 
         queryset.filter.assert_called_once_with(
-            details__question_text__iexact=OLD_RESERVE_QUESTION_TEXT,
-            details__response="Yes",
+            details__pre_or_post="Pre",
+            details__question_text="OPC Vegetation",
+            details__response__in=["Grassland", "Heath"],
         )
-        filtered.distinct.assert_called_once_with()
+        first_filtered.filter.assert_called_once_with(
+            details__pre_or_post="Pre",
+            details__question_text="Transect physical habitat",
+            details__response__in=["grass closed"],
+        )
+        second_filtered.distinct.assert_called_once_with()
         self.assertEqual(result, "distinct-queryset")

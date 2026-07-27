@@ -15,7 +15,16 @@
             <span class="fa-fw fa-solid fa-location-dot" aria-hidden="true"></span>
             {% trans "Track points" %}
         </h3>
-        <p class="w3-text-grey">{% trans "GPS checkpoints recorded throughout the transect." %}</p>
     </header>
-    {% include "bones/partials/table.html" with table_headers=transect_track_headers table_rows=transect_track_rows table_caption=_('Transect track points') %}
+    <p class="w3-text-grey">
+        {% blocktrans count counter=transect_track_point_count|default:0 %}
+            {{ counter }} GPS track point is available in the Map tab and GPS download.
+        {% plural %}
+            {{ counter }} GPS track points are available in the Map tab and GPS download.
+        {% endblocktrans %}
+    </p>
+    <button class="w3-button w3-border w3-round" type="button" onclick="document.getElementById('tab-map').click(); window.location.hash='map';">
+        <span class="fa-solid fa-map-location-dot" aria-hidden="true"></span>
+        {% trans "Open map" %}
+    </button>
 </section>

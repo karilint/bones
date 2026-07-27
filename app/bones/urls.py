@@ -1,8 +1,15 @@
 from django.urls import include, path
 from django.views.generic import RedirectView
 
+from .image_views import ImageDeleteView, ImageUploadView, ProtectedImageView
+from .map_views import (
+    AllCompletedTransectsMapDataView, AllCompletedTransectsMapView,
+    OccurrenceMapDataView, TransectMapDataView,
+)
+
 from .views import (
     CompletedOccurrenceDetailView,
+    CompletedInstanceDetailView,
     CompletedOccurrenceHistoryEntryView,
     CompletedOccurrenceHistoryListView,
     CompletedOccurrenceHistoryRecordView,
@@ -22,6 +29,9 @@ from .views import (
     DataTypeDetailView,
     DataTypeListView,
     DataTypeOptionListView,
+    EntityImageHistoryEntryView,
+    EntityImageHistoryListView,
+    EntityImageHistoryRecordView,
     HistoryIndexView,
     ProjectConfigDetailView,
     ProjectConfigListView,
@@ -38,6 +48,9 @@ app_name = "bones"
 transect_patterns = (
     [
         path("", CompletedTransectListView.as_view(), name="list"),
+        path("map/", AllCompletedTransectsMapView.as_view(), name="map"),
+        path("map-data/", AllCompletedTransectsMapDataView.as_view(), name="all_map_data"),
+        path("<int:pk>/map-data/", TransectMapDataView.as_view(), name="map_data"),
         path("<int:pk>/", CompletedTransectDetailView.as_view(), name="detail"),
     ],
     "transects",
@@ -46,7 +59,9 @@ transect_patterns = (
 occurrence_patterns = (
     [
         path("", CompletedOccurrenceListView.as_view(), name="list"),
+        path("<int:pk>/map-data/", OccurrenceMapDataView.as_view(), name="map_data"),
         path("<int:pk>/", CompletedOccurrenceDetailView.as_view(), name="detail"),
+        path("<int:occurrence_pk>/instances/<int:instance_number>/", CompletedInstanceDetailView.as_view(), name="instance_detail"),
     ],
     "occurrences",
 )
@@ -123,6 +138,17 @@ history_patterns = (
             CompletedWorkflowHistoryEntryView.as_view(),
             name="workflow_entry",
         ),
+        path("images/", EntityImageHistoryListView.as_view(), name="images"),
+        path(
+            "images/<uuid:pk>/",
+            EntityImageHistoryRecordView.as_view(),
+            name="image_record",
+        ),
+        path(
+            "images/<uuid:pk>/<int:history_id>/",
+            EntityImageHistoryEntryView.as_view(),
+            name="image_entry",
+        ),
         path("questions/", QuestionHistoryListView.as_view(), name="questions"),
         path(
             "questions/<str:pk>/",
@@ -155,4 +181,7 @@ urlpatterns = [
     path("logs/", include(log_patterns)),
     path("history/", include(history_patterns)),
     path("select2/", include("django_select2.urls")),
+    path("images/upload/<str:entity_type>/<path:entity_id>/", ImageUploadView.as_view(), name="image_upload"),
+    path("images/<uuid:pk>/delete/", ImageDeleteView.as_view(), name="image_delete"),
+    path("images/<uuid:pk>/<str:variant>/", ProtectedImageView.as_view(), name="image_file"),
 ]

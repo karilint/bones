@@ -1,3 +1,4 @@
+from .instance import CompletedInstanceDetailView
 """View package exports for the Bones application."""
 from .dashboard import DashboardView
 from .detail import (
@@ -16,6 +17,9 @@ from .history import (
     CompletedWorkflowHistoryEntryView,
     CompletedWorkflowHistoryListView,
     CompletedWorkflowHistoryRecordView,
+    EntityImageHistoryEntryView,
+    EntityImageHistoryListView,
+    EntityImageHistoryRecordView,
     HistoryIndexView,
     QuestionHistoryEntryView,
     QuestionHistoryListView,
@@ -55,6 +59,9 @@ __all__ = [
     "ProjectConfigDetailView",
     "QuestionDetailView",
     "HistoryIndexView",
+    "EntityImageHistoryListView",
+    "EntityImageHistoryRecordView",
+    "EntityImageHistoryEntryView",
     "CompletedTransectHistoryListView",
     "CompletedTransectHistoryRecordView",
     "CompletedTransectHistoryEntryView",

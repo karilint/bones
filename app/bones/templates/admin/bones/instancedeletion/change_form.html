@@ -1,0 +1,8 @@
+{% extends "admin/change_form.html" %}
+{% load i18n %}
+{% block object-tools-items %}
+  {% if restore_instance_url %}
+    <li><a href="{{ restore_instance_url }}" class="historylink">{% trans "Restore instance" %}</a></li>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}

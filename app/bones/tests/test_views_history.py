@@ -42,7 +42,8 @@ class HistoryViewTests(SimpleTestCase):
         view.setup(request)
         context = view.get_context_data()
         sections = context["history_sections"]
-        self.assertEqual(len(sections), 4)
+        self.assertEqual(len(sections), 5)
+        self.assertEqual(str(sections[-1].label), "Images")
         for section in sections:
             self.assertIsNotNone(section.label)
 
@@ -56,7 +57,7 @@ class HistoryViewTests(SimpleTestCase):
         entry = entries[0]
         self.assertIn("record_url", entry)
         self.assertIn("detail_url", entry)
-        self.assertIsNone(entry["record_url"])
+        self.assertEqual(entry["record_url"], "/history/questions/q1/")
 
     def test_timeline_view_handles_database_errors(self):
         view = ErrorHistoryTimelineView()

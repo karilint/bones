@@ -21,6 +21,7 @@ from ..filters import (
     ProjectConfigFilterSet,
     QuestionFilterSet,
     TemplateTransectFilterSet,
+    NOTE_FILTER_MAX_ROWS,
 )
 from ..models import (
     CompletedOccurrence,
@@ -222,7 +223,7 @@ class CompletedTransectListView(BonesListView):
     page_icon = "fa-solid fa-route"
     page_title = "Completed transects"
     intro_text = _(
-        "Review completed transects, their templates, and the number of occurrences gathered in the field."
+        "Review completed transects and the number of occurrences gathered in the field."
     )
     detail_route_name = "transects:detail"
     history_route_name = "history:transects"
@@ -235,10 +236,23 @@ class CompletedTransectListView(BonesListView):
         )
         return super().get_queryset()
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        filterset = context.get("filter")
+        if filterset is not None:
+            context.update(
+                {
+                    "filter_extra_template": "bones/partials/transect_note_filters.html",
+                    "transect_note_filter_rows": filterset.note_filter_form_rows,
+                    "transect_note_filter_choices": filterset.note_filter_choices,
+                    "transect_note_filter_max_rows": NOTE_FILTER_MAX_ROWS,
+                }
+            )
+        return context
+
     def get_table_headers(self):
         return [
             {"label": _("Transect")},
-            {"label": _("Template")},
             {"label": _("Started")},
             {"label": _("Ended")},
             {"label": _("State")},
@@ -256,7 +270,6 @@ class CompletedTransectListView(BonesListView):
             rows.append(
                 [
                     {"value": transect.name, "url": self.get_detail_url(transect)},
-                    {"value": format_value(getattr(transect.transect_template, "name", transect.transect_template))},
                     {"value": format_datetime(transect.start_time)},
                     {"value": format_datetime(transect.end_time)},
                     {"value": format_value(transect.state)},
