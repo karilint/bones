@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 
 from django.conf import settings
+from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
 from simple_history.models import HistoricalRecords
 
@@ -63,3 +64,28 @@ class InstanceDeletion(models.Model):
             f"Transect {self.transect_uid}, occurrence {self.occurrence_number}, "
             f"instance {self.instance_number}"
         )
+
+
+class TransectDeletion(models.Model):
+    """Permanent audit summary for deleting one completed transect."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    transect_uid = models.IntegerField(db_index=True)
+    transect_name = models.CharField(max_length=200)
+    template_name = models.CharField(max_length=200)
+    transect_date = models.DateField(blank=True, null=True)
+    reason = models.CharField(max_length=100)
+    deleted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="bones_transect_deletions")
+    deleted_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    occurrence_count = models.PositiveIntegerField(default=0)
+    workflow_count = models.PositiveIntegerField(default=0)
+    response_count = models.PositiveIntegerField(default=0)
+    snapshot = models.JSONField(default=dict, blank=True, encoder=DjangoJSONEncoder)
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ("-deleted_at",)
+        permissions = (("delete_completed_transect", "Can delete completed transects"),)
+
+    def __str__(self):
+        return f"{self.transect_name} ({self.transect_uid})"

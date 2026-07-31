@@ -1,0 +1,4 @@
+{% extends "admin/base_site.html" %}{% load i18n %}{% block content %}
+<div id="content-main"><form method="get" class="module aligned">{{ form.non_field_errors }}{% for field in form %}<div class="form-row"><div>{{ field.errors }}{{ field.label_tag }} {{ field }}</div></div>{% endfor %}<div class="submit-row"><input type="submit" value="{% trans 'Search' %}" class="default"></div></form>
+{% if results %}<table id="result_list"><thead><tr><th>Template</th><th>UID</th><th>Name</th><th>Date</th><th></th></tr></thead><tbody>{% for transect in results %}<tr><td>{{ transect.transect_template.name }}</td><td>{{ transect.pk }}</td><td>{{ transect.name }}</td><td>{{ transect.start_time|date:"Y-m-d" }}</td><td><a href="{{ transect.deletion_url }}" class="deletelink">{% trans "Review deletion" %}</a></td></tr>{% endfor %}</tbody></table>{% elif request.GET %}<p>{% trans "No matching completed transects found." %}</p>{% endif %}</div>
+{% endblock %}

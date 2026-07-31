@@ -129,6 +129,10 @@ class EntityImage(models.Model):
         on_delete=models.SET_NULL,
         related_name="archived_images",
     )
+    archived_by_transect_deletion = models.ForeignKey(
+        "bones.TransectDeletion", blank=True, null=True, on_delete=models.SET_NULL,
+        related_name="archived_images",
+    )
 
     history = HistoricalRecords()
 

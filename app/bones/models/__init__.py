@@ -1,5 +1,5 @@
 """Domain models for the bones application."""
-from .audit import InstanceDeletion
+from .audit import InstanceDeletion, TransectDeletion
 from .completed import (  # noqa: F401
     CompletedOccurrence,
     CompletedOccurrenceInfo,
@@ -34,6 +34,7 @@ __all__ = [
     "EntityImageTarget",
     "ImageImportBatch",
     "InstanceDeletion",
+    "TransectDeletion",
     "DataLogFile",
     "DataType",
     "DataTypeOption",
