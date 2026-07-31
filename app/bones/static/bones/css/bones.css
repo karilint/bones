@@ -42,7 +42,11 @@ body {
     }
 }
 
-.bones-image-thumbnail { width: 100%; height: 220px; object-fit: cover; }
+.bones-image-thumbnail {
+    display: block;
+    width: 100%;
+    height: auto;
+}
 .bones-map {
     width: 100%;
     min-height: 28rem;

@@ -19,6 +19,7 @@
             {% include "bones/partials/table.html" with table_headers=occurrence_response_headers table_rows=instance.response_rows table_caption=response_caption %}
             {% blocktrans trimmed with number=instance.display_number asvar workflow_caption %}Workflows for instance {{ number }}{% endblocktrans %}
             {% include "bones/partials/table.html" with table_headers=occurrence_workflow_headers table_rows=instance.workflow_rows table_caption=workflow_caption %}
+            {% include "bones/images/_readonly_gallery.html" with images=instance.images instance_number=instance.number instance_display_number=instance.display_number %}
         </section>
     {% endfor %}
 {% else %}

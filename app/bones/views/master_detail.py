@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any, Iterable, Mapping, Sequence
 
 from django.db import DatabaseError
-from django.db.models import Count, Prefetch
+from django.db.models import Count, Prefetch, Q
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import DetailView
 
@@ -15,9 +15,9 @@ from .detail import (
     format_value,
     safe_reverse,
 )
-from ..image_views import image_context
+from ..image_views import image_context, instance_key
 from ..maps import map_context
-from ..models import CompletedOccurrence, CompletedTransect
+from ..models import CompletedOccurrence, CompletedTransect, EntityImage
 from .mixins import BonesAuthMixin
 
 
@@ -620,6 +620,7 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
         *,
         workflows: Iterable[Any] | None = None,
         responses: Iterable[Any] | None = None,
+        images_by_instance: Mapping[Any, Sequence[EntityImage]] | None = None,
     ) -> list[dict[str, Any]]:
         workflow_entries = self._as_list(workflows if workflows is not None else getattr(self.object, "workflows", None))
         response_entries = self._as_list(responses if responses is not None else getattr(self.object, "responses", None))
@@ -665,11 +666,43 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
                     "display_number": format_value(instance_number),
                     "workflow_rows": workflow_rows,
                     "response_rows": response_rows,
+                    "images": list((images_by_instance or {}).get(instance_number, [])),
                     "url": url,
                 }
             )
 
         return summaries
+
+    def get_instance_images(
+        self, instance_numbers: Iterable[Any]
+    ) -> dict[Any, list[EntityImage]]:
+        occurrence_pk = getattr(self.object, "pk", None)
+        numbers_by_key = {
+            instance_key(occurrence_pk, number): number
+            for number in instance_numbers
+        }
+        if not numbers_by_key:
+            return {}
+
+        images = EntityImage.objects.filter(
+            Q(targets__entity_type=EntityImage.INSTANCE, targets__entity_id__in=numbers_by_key)
+            | Q(entity_type=EntityImage.INSTANCE, entity_id__in=numbers_by_key)
+        ).prefetch_related("targets").distinct()
+        grouped: dict[Any, list[EntityImage]] = {
+            number: [] for number in numbers_by_key.values()
+        }
+        for image in images:
+            direct_key = image.entity_id if image.entity_type == EntityImage.INSTANCE else None
+            target_keys = {
+                target.entity_id
+                for target in image.targets.all()
+                if target.entity_type == EntityImage.INSTANCE
+            }
+            for key in target_keys | ({direct_key} if direct_key else set()):
+                number = numbers_by_key.get(key)
+                if number is not None and image not in grouped[number]:
+                    grouped[number].append(image)
+        return grouped
 
     def get_history_entries(self) -> list[Any]:
         try:
@@ -726,6 +759,11 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
             workflows=workflows,
             responses=responses,
         )
+        images_by_instance = self.get_instance_images(
+            instance["number"] for instance in occurrence_instances
+        )
+        for instance in occurrence_instances:
+            instance["images"] = images_by_instance.get(instance["number"], [])
         context.update(
             {
                 "overview_sections": self.get_overview_sections(),

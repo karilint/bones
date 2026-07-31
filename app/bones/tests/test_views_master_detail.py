@@ -1,6 +1,8 @@
 from types import SimpleNamespace
 from unittest.mock import patch
+from uuid import uuid4
 
+from django.template.loader import render_to_string
 from django.test import RequestFactory, SimpleTestCase
 
 from ..views.master_detail import (
@@ -231,3 +233,59 @@ class MasterDetailViewTests(SimpleTestCase):
 
         instance_two_questions = [row[0]["value"] for row in instance_two["response_rows"]]
         self.assertEqual(instance_two_questions, ["Beta question"])
+
+    def test_completed_occurrence_instance_summaries_include_matching_images(self):
+        view = CompletedOccurrenceDetailView()
+        view.object = SimpleNamespace(pk=42)
+        image = SimpleNamespace(pk=uuid4())
+
+        with patch("bones.views.master_detail.safe_reverse", return_value="/workflows/"):
+            summaries = view.get_instance_summaries(
+                workflows=[
+                    SimpleNamespace(
+                        pk=1,
+                        template_workflow=SimpleNamespace(name="Alpha"),
+                        instance_number=1,
+                        completed_by="Alice",
+                    )
+                ],
+                responses=[],
+                images_by_instance={1: [image]},
+            )
+
+        self.assertEqual(summaries[0]["images"], [image])
+
+    def test_instance_image_gallery_is_read_only(self):
+        image = SimpleNamespace(
+            pk=uuid4(),
+            alt_text="Instance photograph",
+            generated_alt_text="Generated description",
+        )
+
+        html = render_to_string(
+            "bones/images/_readonly_gallery.html",
+            {
+                "images": [image],
+                "instance_number": 1,
+                "instance_display_number": "1",
+            },
+        )
+
+        self.assertIn("Images for instance 1", html)
+        self.assertIn("Instance photograph", html)
+        self.assertIn("/thumbnail/", html)
+        self.assertNotIn("<form", html)
+        self.assertNotIn("Upload image", html)
+        self.assertNotIn("Remove link", html)
+
+    def test_instance_image_gallery_is_omitted_when_empty(self):
+        html = render_to_string(
+            "bones/images/_readonly_gallery.html",
+            {
+                "images": [],
+                "instance_number": 1,
+                "instance_display_number": "1",
+            },
+        )
+
+        self.assertEqual(html.strip(), "")

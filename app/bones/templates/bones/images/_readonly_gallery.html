@@ -1,0 +1,20 @@
+{% load i18n %}
+{% if images %}
+  <section class="w3-section" aria-labelledby="instance-{{ instance_number }}-images-heading">
+    <header>
+      <h4 id="instance-{{ instance_number }}-images-heading" class="w3-large">
+        <span class="fa-solid fa-images" aria-hidden="true"></span>
+        {% blocktrans trimmed with number=instance_display_number %}Images for instance {{ number }}{% endblocktrans %}
+      </h4>
+    </header>
+    <div class="w3-row-padding">
+      {% for image in images %}
+        <article class="w3-col s12 m6 l4 w3-margin-bottom">
+          <a href="{% url 'bones:image_file' image.pk 'original' %}" target="_blank" rel="noopener">
+            <img src="{% url 'bones:image_file' image.pk 'thumbnail' %}" alt="{{ image.alt_text|default:image.generated_alt_text }}" class="bones-image-thumbnail">
+          </a>
+        </article>
+      {% endfor %}
+    </div>
+  </section>
+{% endif %}
