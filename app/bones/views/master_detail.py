@@ -18,6 +18,7 @@ from .detail import (
 from ..image_views import image_context, instance_key
 from ..maps import map_context
 from ..models import CompletedOccurrence, CompletedTransect, EntityImage
+from ..reports.mni_detail import build_mni_detail, empty_mni_detail
 from .mixins import BonesAuthMixin
 
 
@@ -360,6 +361,11 @@ class CompletedTransectDetailView(BonesMasterDetailView):
                 "template": "bones/completed_transects/_related.html",
             },
             {
+                "id": "mni", "label": _("MNI"),
+                "icon": "fa-solid fa-calculator", "active": False,
+                "template": "bones/completed_transects/_mni.html",
+            },
+            {
                 "id": "history",
                 "label": _("History"),
                 "icon": "fa-solid fa-clock-rotate-left",
@@ -389,6 +395,12 @@ class CompletedTransectDetailView(BonesMasterDetailView):
                 "transect_history_error": self.history_error,
             }
         )
+        try:
+            context["mni_detail"] = build_mni_detail(self.object.pk)
+        except DatabaseError:
+            context["mni_detail"] = empty_mni_detail(
+                _("MNI is temporarily unavailable.")
+            )
         context.update(image_context("transect", self.object.pk, self.request.user))
         context.update(
             map_context(
@@ -415,6 +427,12 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
     history_route_name = "bones:history:occurrence_record"
     breadcrumb_list_label = _("Completed occurrences")
     tablist_label = _("Occurrence detail navigation")
+    default_response_questions = (
+        "What element is this?",
+        "Complete?",
+        "Side",
+        "Weathering class",
+    )
 
     def get_queryset(self):
         return (
@@ -532,6 +550,7 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
         responses: Iterable[Any] | None = None,
         *,
         instance_number: Any | None = None,
+        question_texts: set[str] | None = None,
     ) -> tuple[list[dict[str, Any]], list[list[dict[str, Any]]]]:
         headers = [
             {"label": _("Question")},
@@ -552,6 +571,12 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
                 entry
                 for entry in response_entries
                 if self._resolve_instance_number(entry) == instance_number
+            ]
+        if question_texts is not None:
+            response_entries = [
+                entry
+                for entry in response_entries
+                if getattr(entry, "question_text", "") in question_texts
             ]
         response_entries = self._sort_responses(response_entries)
         for response in response_entries:
@@ -621,6 +646,9 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
         workflows: Iterable[Any] | None = None,
         responses: Iterable[Any] | None = None,
         images_by_instance: Mapping[Any, Sequence[EntityImage]] | None = None,
+        question_texts: set[str] | None = None,
+        match_question: str = "",
+        match_response: str = "",
     ) -> list[dict[str, Any]]:
         workflow_entries = self._as_list(workflows if workflows is not None else getattr(self.object, "workflows", None))
         response_entries = self._as_list(responses if responses is not None else getattr(self.object, "responses", None))
@@ -640,6 +668,20 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
 
         instance_order.sort()
 
+        if match_question and match_response:
+            matching_instances = {
+                self._resolve_instance_number(response)
+                for response in response_entries
+                if not getattr(response, "skipped", False)
+                and str(getattr(response, "question_text", "")).casefold()
+                == match_question.casefold()
+                and str(getattr(response, "response", "")).casefold()
+                == match_response.casefold()
+            }
+            instance_order = [
+                number for number in instance_order if number in matching_instances
+            ]
+
         summaries: list[dict[str, Any]] = []
         base_url = safe_reverse("workflows:list")
         occurrence_pk = getattr(self.object, "pk", None)
@@ -652,6 +694,7 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
             _, response_rows = self.get_response_table(
                 response_entries,
                 instance_number=instance_number,
+                question_texts=question_texts,
             )
             url = safe_reverse(
                 "bones:occurrences:instance_detail",
@@ -672,6 +715,30 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
             )
 
         return summaries
+
+    @staticmethod
+    def get_response_question_choices(responses: Iterable[Any]) -> list[str]:
+        return sorted(
+            {
+                str(response.question_text)
+                for response in responses
+                if getattr(response, "question_text", None)
+                and not getattr(response, "skipped", False)
+            },
+            key=str.casefold,
+        )
+
+    @staticmethod
+    def get_response_value_choices(responses: Iterable[Any]) -> list[str]:
+        return sorted(
+            {
+                str(response.response)
+                for response in responses
+                if getattr(response, "response", None) not in (None, "")
+                and not getattr(response, "skipped", False)
+            },
+            key=str.casefold,
+        )
 
     def get_instance_images(
         self, instance_numbers: Iterable[Any]
@@ -735,6 +802,11 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
                 "template": "bones/completed_occurrences/_related.html",
             },
             {
+                "id": "mni", "label": _("MNI"),
+                "icon": "fa-solid fa-calculator", "active": False,
+                "template": "bones/completed_occurrences/_mni.html",
+            },
+            {
                 "id": "history",
                 "label": _("History"),
                 "icon": "fa-solid fa-clock-rotate-left",
@@ -752,12 +824,31 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
         detail_headers, detail_rows = self.get_detail_table()
         workflows = self._as_list(getattr(self.object, "workflows", None))
         responses = self._as_list(getattr(self.object, "responses", None))
+        response_question_choices = self.get_response_question_choices(responses)
+        response_filter_applied = "response_filter_applied" in self.request.GET
+        if response_filter_applied:
+            selected_response_questions = self.request.GET.getlist("response_question")
+        else:
+            available_questions = set(response_question_choices)
+            selected_response_questions = [
+                question
+                for question in self.default_response_questions
+                if question in available_questions
+            ]
+        selected_response_question_set = (
+            set(selected_response_questions) if selected_response_questions else None
+        )
+        match_question = self.request.GET.get("match_question", "").strip()
+        match_response = self.request.GET.get("match_response", "").strip()
         response_headers, response_rows = self.get_response_table(responses=responses)
         workflow_headers, workflow_rows = self.get_workflow_table(workflows=workflows)
         history_entries = self.get_history_entries()
         occurrence_instances = self.get_instance_summaries(
             workflows=workflows,
             responses=responses,
+            question_texts=selected_response_question_set,
+            match_question=match_question,
+            match_response=match_response,
         )
         images_by_instance = self.get_instance_images(
             instance["number"] for instance in occurrence_instances
@@ -774,10 +865,23 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
                 "occurrence_workflow_headers": workflow_headers,
                 "occurrence_workflow_rows": workflow_rows,
                 "occurrence_instances": occurrence_instances,
+                "response_question_choices": response_question_choices,
+                "response_value_choices": self.get_response_value_choices(responses),
+                "selected_response_questions": selected_response_questions,
+                "match_question": match_question,
+                "match_response": match_response,
                 "occurrence_history_entries": history_entries,
                 "occurrence_history_error": self.history_error,
             }
         )
+        try:
+            context["mni_detail"] = build_mni_detail(
+                self.object.transect_id, occurrence_id=self.object.pk
+            )
+        except DatabaseError:
+            context["mni_detail"] = empty_mni_detail(
+                _("MNI is temporarily unavailable.")
+            )
         context.update(image_context("occurrence", self.object.pk, self.request.user))
         context.update(
             map_context(

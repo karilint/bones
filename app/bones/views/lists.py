@@ -303,6 +303,22 @@ class CompletedOccurrenceListView(BonesListView):
         )
         return super().get_queryset()
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        filterset = context.get("filter")
+        if filterset is not None:
+            context.update(
+                {
+                    "filter_extra_template": "bones/partials/occurrence_note_filters.html",
+                    "transect_note_filter_rows": filterset.transect_note_filter_form_rows,
+                    "transect_note_filter_choices": filterset.transect_note_filter_choices,
+                    "occurrence_note_filter_rows": filterset.occurrence_note_filter_form_rows,
+                    "occurrence_note_filter_choices": filterset.occurrence_note_filter_choices,
+                    "note_filter_max_rows": NOTE_FILTER_MAX_ROWS,
+                }
+            )
+        return context
+
     def get_table_headers(self):
         return [
             {"label": _("Occurrence")},

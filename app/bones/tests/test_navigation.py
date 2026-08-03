@@ -61,3 +61,7 @@ class NavigationContextTests(SimpleTestCase):
     def test_completed_occurrences_link_points_to_list_view(self):
         link = self._find_link("Completed Occurrences")
         self.assertEqual(link["url"], reverse("bones:occurrences:list"))
+
+    def test_mni_report_link_points_to_report(self):
+        link = self._find_link("MNI Summary")
+        self.assertEqual(link["url"], reverse("bones:reports:mni"))

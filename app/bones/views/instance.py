@@ -1,4 +1,5 @@
 from django.shortcuts import get_object_or_404
+from django.db import DatabaseError
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import TemplateView
 
@@ -6,6 +7,7 @@ from .detail import safe_reverse
 from .mixins import BonesAuthMixin
 from ..image_views import image_context, instance_key
 from ..models import CompletedOccurrence, CompletedWorkflow
+from ..reports.mni_detail import build_mni_detail, empty_mni_detail
 
 
 class CompletedInstanceDetailView(BonesAuthMixin, TemplateView):
@@ -34,6 +36,7 @@ class CompletedInstanceDetailView(BonesAuthMixin, TemplateView):
             ],
             "tabs": [
                 {"id": "overview", "label": _("Overview"), "icon": "fa-solid fa-circle-info", "active": True, "template": "bones/completed_instances/_overview.html"},
+                {"id": "mni", "label": _("MNI evidence"), "icon": "fa-solid fa-calculator", "active": False, "template": "bones/completed_instances/_mni.html"},
                 {"id": "images", "label": _("Images"), "icon": "fa-solid fa-images", "active": False, "template": "bones/images/_tab.html"},
             ],
             "tablist_label": _("Instance detail navigation"),
@@ -41,5 +44,15 @@ class CompletedInstanceDetailView(BonesAuthMixin, TemplateView):
             "list_url": safe_reverse("bones:occurrences:detail", kwargs={"pk": self.occurrence.pk}),
             "history_url": None, "extra_actions": [],
         })
+        try:
+            context["mni_detail"] = build_mni_detail(
+                self.occurrence.transect_id,
+                occurrence_id=self.occurrence.pk,
+                instance_number=number,
+            )
+        except DatabaseError:
+            context["mni_detail"] = empty_mni_detail(
+                _("MNI is temporarily unavailable.")
+            )
         context.update(image_context("instance", instance_key(self.occurrence.pk, number), self.request.user))
         return context

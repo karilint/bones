@@ -89,3 +89,31 @@ class TransectDeletion(models.Model):
 
     def __str__(self):
         return f"{self.transect_name} ({self.transect_uid})"
+
+
+class OccurrenceDeletion(models.Model):
+    """Permanent snapshot of a deleted completed occurrence and its children."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    occurrence_id = models.IntegerField(db_index=True)
+    occurrence_number = models.IntegerField()
+    transect_uid = models.IntegerField(db_index=True)
+    template_name = models.CharField(max_length=200)
+    reason = models.CharField(max_length=100)
+    deleted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name="bones_occurrence_deletions",
+    )
+    deleted_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    workflow_count = models.PositiveIntegerField(default=0)
+    response_count = models.PositiveIntegerField(default=0)
+    snapshot = models.JSONField(default=dict, blank=True, encoder=DjangoJSONEncoder)
+
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ("-deleted_at",)
+        permissions = (("delete_completed_occurrence", "Can delete completed occurrences"),)
+
+    def __str__(self):
+        return f"Occurrence {self.occurrence_number} ({self.occurrence_id})"

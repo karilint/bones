@@ -1,0 +1,5 @@
+{% load i18n %}
+{% trans "Transect notes" as transect_notes_title %}
+{% trans "Occurrence notes" as occurrence_notes_title %}
+{% include "bones/partials/note_filter_group.html" with group_id="transect-note-filters" title=transect_notes_title prefix="transect_note_" rows=transect_note_filter_rows choices=transect_note_filter_choices max_rows=note_filter_max_rows response_map_id="transect-note-response-map" %}
+{% include "bones/partials/note_filter_group.html" with group_id="occurrence-note-filters" title=occurrence_notes_title prefix="occurrence_note_" rows=occurrence_note_filter_rows choices=occurrence_note_filter_choices max_rows=note_filter_max_rows response_map_id="occurrence-note-response-map" %}

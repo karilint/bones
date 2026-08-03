@@ -25,10 +25,10 @@ class BulkForm(forms.Form):
 
 @admin.register(EntityImage)
 class EntityImageAdmin(admin.ModelAdmin):
-    list_display=("original_name","entity_type","entity_id","source_schema","uploaded_by","uploaded_at","archived_by_deletion","archived_by_transect_deletion")
+    list_display=("original_name","entity_type","entity_id","source_schema","uploaded_by","uploaded_at","archived_by_deletion","archived_by_occurrence_deletion","archived_by_transect_deletion")
     readonly_fields=("checksum","exif_metadata","parsed_metadata","uploaded_at")
     def has_delete_permission(self,request,obj=None):
-        if obj is not None and (obj.archived_by_deletion_id or obj.archived_by_transect_deletion_id):
+        if obj is not None and (obj.archived_by_deletion_id or obj.archived_by_occurrence_deletion_id or obj.archived_by_transect_deletion_id):
             return False
         return super().has_delete_permission(request,obj)
     def get_actions(self,request):
@@ -98,5 +98,6 @@ class ImageImportBatchAdmin(admin.ModelAdmin):
 
 # Register the grouped instance deletion workflow.
 from . import instance_admin  # noqa: E402,F401
+from . import occurrence_admin  # noqa: E402,F401
 from . import transect_admin  # noqa: E402,F401
 from . import admin_general  # noqa: E402,F401

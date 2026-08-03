@@ -176,8 +176,7 @@ class InstanceDeletionAdmin(admin.ModelAdmin):
         "deleted_by__username",
         "reason",
         "restoration_status",
-        "restored_by",
-        "restored_at",
+        "restored_by__username",
     )
     list_filter = ("deleted_at", "template_name", "deleted_by")
     readonly_fields = tuple(field.name for field in InstanceDeletion._meta.fields)

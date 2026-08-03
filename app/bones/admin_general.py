@@ -2,12 +2,16 @@ from __future__ import annotations
 import hashlib, json
 from urllib.parse import urlencode
 from django import forms
-from django.contrib import admin
-from django.core.exceptions import ValidationError
-from django.urls import reverse
+from django.contrib import admin, messages
+from django.contrib.admin.models import CHANGE, LogEntry
+from django.contrib.contenttypes.models import ContentType
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import path, reverse
 from django.utils.html import format_html
 from simple_history.admin import SimpleHistoryAdmin
-from .models import (CompletedOccurrence,CompletedOccurrenceInfo,CompletedResponse,CompletedTransect,CompletedTransectInfo,CompletedTransectTrack,CompletedWorkflow,DataLogFile,DataType,DataTypeOption,ProjectConfig,Question,TemplateTransect,TemplateWorkflow,TransectDataLog)
+from .models import (CompletedOccurrence,CompletedOccurrenceInfo,CompletedResponse,CompletedTransect,CompletedTransectInfo,CompletedTransectTrack,CompletedWorkflow,DataLogFile,DataType,DataTypeOption,MNIElementRule,MNITaxonRule,MNIWeatheringRule,ProjectConfig,Question,TemplateTransect,TemplateWorkflow,TransectDataLog)
 
 def signature(obj):
     if not obj or obj.pk is None: return ""
@@ -25,6 +29,15 @@ class ResponseAuditForm(AuditFieldsForm):
         required=False,
         help_text="Selecting one option stores its code and text together.",
     )
+class OccurrenceInfoAuditForm(AuditFieldsForm):
+    answer_option=forms.ChoiceField(
+        label="Answer",
+        required=False,
+        help_text="Selecting one option stores its code and text together.",
+    )
+class WorkflowDeletionForm(forms.Form):
+    reason=forms.CharField(max_length=100,widget=forms.Textarea(attrs={"rows":3}),help_text="Required. Stored in workflow and response deletion history.")
+    confirm=forms.BooleanField(label="I confirm that this workflow and its responses should be deleted")
 class BonesHistoryAdmin(SimpleHistoryAdmin):
     form=AuditFieldsForm
     list_per_page=50; save_on_top=True
@@ -118,6 +131,7 @@ class ResponseAdmin(BonesHistoryAdmin):
         return OptionAnswerForm
 @admin.register(CompletedWorkflow)
 class WorkflowAdmin(BonesHistoryAdmin):
+    change_form_template="admin/bones/completedworkflow/change_form.html"
     list_display=("uid","transect_uid","occurrence_label","instance_number","template_workflow","completed_by","answers","instance_page","history_link")
     list_select_related=("occurrence__transect__transect_template","template_workflow")
     search_fields=("uid__icontains","=occurrence__transect__uid","occurrence__transect__transect_template__name__icontains","=occurrence__id","=occurrence__occurrence_number","=instance_number","template_workflow__name__icontains","completed_by__icontains")
@@ -132,9 +146,60 @@ class WorkflowAdmin(BonesHistoryAdmin):
     def answers(self,o): return format_html('<a href="{}?{}">View answers</a>',reverse("admin:bones_completedresponse_changelist"),urlencode({"workflow__uid__exact":o.pk}))
     @admin.display(description="Instance page")
     def instance_page(self,o): return format_html('<a href="{}">Open instance</a>',reverse("bones:occurrences:instance_detail",kwargs={"occurrence_pk":o.occurrence_id,"instance_number":o.instance_number}))
+    def get_urls(self):
+        custom=[path("<path:object_id>/remove/",self.admin_site.admin_view(self.remove_workflow),name="bones_completedworkflow_remove")]
+        return custom+super().get_urls()
+    def change_view(self,request,object_id,form_url="",extra_context=None):
+        remove_url=None
+        if request.user.has_perm("bones.delete_completedworkflow"):
+            remove_url=reverse("admin:bones_completedworkflow_remove",args=(object_id,))
+        return super().change_view(request,object_id,form_url,{**(extra_context or {}),"remove_workflow_url":remove_url})
+    def remove_workflow(self,request,object_id):
+        if not request.user.has_perm("bones.delete_completedworkflow"):
+            raise PermissionDenied
+        workflow=get_object_or_404(
+            CompletedWorkflow.objects.select_related("occurrence__transect__transect_template","template_workflow"),
+            pk=object_id,
+        )
+        siblings=CompletedWorkflow.objects.filter(
+            occurrence_id=workflow.occurrence_id,
+            instance_number=workflow.instance_number,
+        ).exclude(pk=workflow.pk)
+        conflict=not siblings.exists()
+        responses=CompletedResponse.objects.filter(workflow_id=workflow.pk)
+        form=WorkflowDeletionForm(request.POST or None)
+        if request.method=="POST" and form.is_valid() and not conflict:
+            reason=form.cleaned_data["reason"]
+            with transaction.atomic():
+                workflow=CompletedWorkflow.objects.select_for_update().get(pk=object_id)
+                if not CompletedWorkflow.objects.select_for_update().filter(
+                    occurrence_id=workflow.occurrence_id,
+                    instance_number=workflow.instance_number,
+                ).exclude(pk=workflow.pk).exists():
+                    form.add_error(None,"This is now the last workflow. Use the complete-instance deletion procedure.")
+                else:
+                    occurrence_id=workflow.occurrence_id; instance_number=workflow.instance_number
+                    response_rows=list(CompletedResponse.objects.select_for_update().filter(workflow_id=workflow.pk))
+                    workflow_label=str(workflow)
+                    for response in response_rows:
+                        response._history_user=request.user; response._change_reason=reason; response.delete()
+                    workflow._history_user=request.user; workflow._change_reason=reason; workflow.delete()
+                    LogEntry.objects.log_action(
+                        user_id=request.user.pk,
+                        content_type_id=ContentType.objects.get_for_model(CompletedWorkflow).pk,
+                        object_id=str(object_id),object_repr=workflow_label,action_flag=CHANGE,
+                        change_message=f"Removed workflow from instance. Reason: {reason}",
+                    )
+                    messages.success(request,"The workflow and its responses were removed; sibling workflows and instance images were retained.")
+                    return redirect(f'{reverse("admin:bones_completedworkflow_changelist")}?occurrence__id__exact={occurrence_id}&instance_number={instance_number}')
+        return render(request,"admin/bones/completedworkflow/remove_workflow.html",{
+            **self.admin_site.each_context(request),"title":"Remove workflow from instance","opts":self.model._meta,
+            "workflow":workflow,"response_count":responses.count(),"conflict":conflict,"form":form,
+        })
 
 @admin.register(CompletedOccurrence)
 class OccurrenceAdmin(BonesHistoryAdmin):
+    change_form_template="admin/bones/completedoccurrence/change_form.html"
     list_display=("id","transect","occurrence_number","recording_start_time","state","instances","answers","history_link")
     list_select_related=("transect__transect_template",)
     search_fields=("=id","=occurrence_number","=transect__uid","transect__name__icontains","transect__transect_template__name__icontains","note__icontains","state__icontains")
@@ -145,6 +210,11 @@ class OccurrenceAdmin(BonesHistoryAdmin):
     def instances(self,o): return format_html('<a href="{}?{}">View instances</a>',reverse("admin:bones_completedworkflow_changelist"),urlencode({"occurrence__id__exact":o.pk}))
     @admin.display(description="Answers")
     def answers(self,o): return format_html('<a href="{}?{}">View answers</a>',reverse("admin:bones_completedresponse_changelist"),urlencode({"occurrence__id__exact":o.pk}))
+    def change_view(self,request,object_id,form_url="",extra_context=None):
+        deletion_url=None
+        if request.user.has_perm("bones.delete_completed_occurrence"):
+            deletion_url=reverse("admin:bones_occurrencedeletion_delete_occurrence",kwargs={"occurrence_id":object_id})
+        return super().change_view(request,object_id,form_url,{**(extra_context or {}),"delete_occurrence_url":deletion_url})
 
 @admin.register(CompletedTransect)
 class TransectAdmin(BonesHistoryAdmin):
@@ -184,6 +254,64 @@ class TransectInfoAdmin(ReadOnlyAdmin): list_display=("transect","pre_or_post","
 @admin.register(CompletedTransectTrack)
 class TrackAdmin(ReadOnlyAdmin): list_display=("id","transect","time","user","is_start","is_turn_point","is_end"); search_fields=("=id","=transect__uid","user__icontains"); list_filter=("is_start","is_checkpoint","is_occurrence","is_turn_point","is_end")
 @admin.register(CompletedOccurrenceInfo)
-class OccurrenceInfoAdmin(ReadOnlyAdmin): list_display=("occurrence","pre_or_post","question_text","response_code","response"); search_fields=("=occurrence__id","question_text__icontains","response_code__icontains","response__icontains")
+class OccurrenceInfoAdmin(BonesHistoryAdmin):
+    form=OccurrenceInfoAuditForm
+    list_display=("occurrence","pre_or_post","question_text","response_code","response","history_link")
+    list_select_related=("occurrence__transect",)
+    search_fields=("=occurrence__id","=occurrence__transect__uid","question_text__icontains","response_code__icontains","response__icontains")
+    list_filter=("pre_or_post",)
+    readonly_fields=("id","occurrence","pre_or_post","question_text","response_data_type","options")
+    fields=("id","occurrence","pre_or_post","question_text","response_data_type","options","answer_option","response_code","response","edit_reason","record_version")
+    @admin.display(description="Configured answer options")
+    def options(self,o):
+        if not o or not o.response_data_type:return ""
+        rows=DataTypeOption.objects.filter(data_type_id=o.response_data_type)[:100]
+        return "; ".join(f"{x.code}: {x.text}" for x in rows) or "Free-form answer"
+    def get_form(self,request,obj=None,change=False,**kwargs):
+        base=super().get_form(request,obj,change,**kwargs)
+        class OptionAnswerForm(base):
+            def __init__(self,*args,**form_kwargs):
+                super().__init__(*args,**form_kwargs)
+                instance=self.instance; options=[]
+                if instance and instance.response_data_type:
+                    options=list(DataTypeOption.objects.filter(data_type_id=instance.response_data_type).order_by("code"))
+                self._answer_options={str(option.code):option for option in options}
+                if options:
+                    choices=[("","---------")]+[(str(x.code),f"{x.code} — {x.text}") for x in options]
+                    self.fields["answer_option"].choices=choices; self.fields["answer_option"].widget=forms.Select(choices=choices)
+                    self.initial["answer_option"]=str(instance.response_code or "")
+                    self.fields["response_code"].widget=forms.HiddenInput(); self.fields["response"].widget=forms.HiddenInput()
+                else:
+                    self.fields["answer_option"].widget=forms.HiddenInput()
+                    self.fields["answer_option"].help_text="No configured options; edit the response fields below."
+            def clean(self):
+                cleaned=super().clean()
+                if self._answer_options:
+                    selected=cleaned.get("answer_option")
+                    if not selected: self.add_error("answer_option","Select an answer.")
+                    else:
+                        option=self._answer_options.get(str(selected))
+                        if option is None: self.add_error("answer_option","Select a configured answer.")
+                        else: cleaned["response_code"]=option.code; cleaned["response"]=option.text or ""
+                return cleaned
+        return OptionAnswerForm
 @admin.register(TransectDataLog)
 class TransectLogAdmin(ReadOnlyAdmin): list_display=("id","transect","data_log_file","is_primary","username"); search_fields=("=id","=transect__uid","=data_log_file__id","username__icontains")
+
+@admin.register(MNIElementRule)
+class MNIElementRuleAdmin(admin.ModelAdmin):
+    list_display=("canonical_name","divisor","paired","excluded","active","reviewed")
+    list_filter=("paired","excluded","active","reviewed")
+    search_fields=("canonical_name","display_name","notes")
+
+@admin.register(MNITaxonRule)
+class MNITaxonRuleAdmin(admin.ModelAdmin):
+    list_display=("source_alias","canonical_label","default_excluded","active")
+    list_filter=("default_excluded","active")
+    search_fields=("source_alias","canonical_label","notes")
+
+@admin.register(MNIWeatheringRule)
+class MNIWeatheringRuleAdmin(admin.ModelAdmin):
+    list_display=("source_class","canonical_class","age_min","age_max","age_min_corrected","age_max_corrected","active","reviewed")
+    list_filter=("active","reviewed")
+    search_fields=("source_class","canonical_class","notes")

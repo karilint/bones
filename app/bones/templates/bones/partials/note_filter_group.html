@@ -1,0 +1,44 @@
+{% load i18n %}
+<section class="w3-margin-top bones-note-filters" aria-labelledby="{{ group_id }}-title" data-note-filter-group data-note-filter-prefix="{{ prefix }}">
+    <div class="w3-border-top w3-padding-16">
+        <div class="w3-row w3-margin-bottom">
+            <div class="w3-col s12 m8">
+                <h3 id="{{ group_id }}-title" class="w3-large w3-margin-0">{{ title }}</h3>
+            </div>
+            <div class="w3-col s12 m4 w3-right-align">
+                <button type="button" class="w3-button w3-white w3-border" data-note-filter-add data-note-filter-max="{{ max_rows }}">
+                    <span class="fa fa-plus" aria-hidden="true"></span>
+                    <span class="w3-margin-left">{% trans "Add note filter" %}</span>
+                </button>
+            </div>
+        </div>
+        {{ choices.response_map|json_script:response_map_id }}
+        <div data-note-filter-list data-note-response-map-id="{{ response_map_id }}">
+            {% for row in rows %}
+                <div class="w3-row-padding bones-note-filter-row" data-note-filter-row>
+                    <div class="w3-col s12 m5 w3-margin-bottom">
+                        <label class="w3-text-grey w3-small" for="{{ prefix }}{{ row.index }}_note">{% trans "Phase / Question" %}</label>
+                        <select id="{{ prefix }}{{ row.index }}_note" name="{{ prefix }}{{ row.index }}_note" class="w3-select w3-border bones-select2" data-placeholder="Any phase/question" data-note-field="note" style="width: 100%">
+                            {% for value, label in choices.notes %}
+                                <option value="{{ value }}"{% if row.note_key == value %} selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="w3-col s12 m6 w3-margin-bottom">
+                        <label class="w3-text-grey w3-small" for="{{ prefix }}{{ row.index }}_response">{% trans "Responses" %}</label>
+                        <select id="{{ prefix }}{{ row.index }}_response" name="{{ prefix }}{{ row.index }}_response" class="w3-select w3-border bones-select2" data-placeholder="Any response" data-note-field="response" multiple style="width: 100%">
+                            {% for value, label in row.response_choices %}
+                                <option value="{{ value }}"{% if value in row.responses %} selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="w3-col s12 m1 w3-margin-bottom bones-note-filter-remove">
+                        <button type="button" class="w3-button w3-white w3-border" data-note-filter-remove aria-label="{% trans 'Remove note filter' %}">
+                            <span class="fa fa-trash" aria-hidden="true"></span>
+                        </button>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>

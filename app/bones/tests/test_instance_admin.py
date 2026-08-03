@@ -66,6 +66,16 @@ class InstanceDeletionAdminTests(SimpleTestCase):
             "/admin/bones/instancedeletion/delete/694/4/",
         )
 
+    def test_admin_search_uses_valid_text_and_related_user_lookups(self):
+        self.assertIn("restored_by__username", self.model_admin.search_fields)
+        self.assertNotIn("restored_by", self.model_admin.search_fields)
+        self.assertNotIn("restored_at", self.model_admin.search_fields)
+        request = self.factory.get("/admin/bones/instancedeletion/", {"q": "273"})
+        queryset, _ = self.model_admin.get_search_results(
+            request, InstanceDeletion.objects.all(), "273"
+        )
+        self.assertIn("273", str(queryset.query))
+
     def test_audit_records_are_not_editable_or_deletable(self):
         request = self.factory.get("/admin/bones/instancedeletion/")
         request.user = type(

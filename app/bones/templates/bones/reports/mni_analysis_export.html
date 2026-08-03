@@ -1,0 +1,141 @@
+{% extends "bones/base.html" %}
+{% load i18n static %}
+{% block title %}{{ page_title }} - Bones{% endblock %}
+{% block head_extra %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
+{% endblock %}
+{% block main %}
+<header class="w3-margin-bottom">
+  <h2><span class="fa-solid fa-file-excel" aria-hidden="true"></span> {{ page_title }}</h2>
+  <p>Download the current bone census data as an Excel workbook. Data rows are not displayed on this page.</p>
+</header>
+{% if report_error %}<div class="w3-panel w3-pale-red w3-border w3-border-red" role="alert">{{ report_error }}</div>{% endif %}
+<form method="get" class="w3-card w3-white w3-padding w3-margin-bottom" aria-label="Bone census data export filters">
+  <input type="hidden" name="export" value="xlsx">
+  <div class="w3-row-padding">
+    {% for field in form %}
+    <div class="w3-col s12 m6 l4 w3-margin-bottom">
+      <label class="w3-text-grey w3-small" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}
+      {% for error in field.errors %}<span class="w3-text-red w3-small">{{ error }}</span>{% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+  {% include "bones/partials/note_filter_group.html" with group_id="mni-analysis-notes" title="Transect note filters" prefix="note_" rows=note_filter.note_filter_form_rows choices=note_filter.note_filter_choices response_map_id="mni-analysis-note-response-map" max_rows=10 %}
+  <button class="w3-button w3-green" type="submit"><span class="fa-solid fa-download" aria-hidden="true"></span> Download Excel</button>
+</form>
+<aside class="w3-panel w3-pale-blue w3-border" aria-label="Export methodology">
+  <p>The workbook contains <strong>key</strong> and <strong>Data</strong> sheets. Estimated death year is the transect year minus the system-managed maximum age for the original weathering class. Weathering classes are not regrouped for this export.</p>
+</aside>
+<footer class="w3-panel w3-light-grey w3-border w3-margin-top" aria-labelledby="bone-census-filters">
+  <h3 id="bone-census-filters" class="w3-medium">Applied filters</h3>
+  <dl id="bone-census-filter-summary">{% for label, value in filter_rows %}<dt><strong>{{ label }}</strong></dt><dd>{{ value }}</dd>{% endfor %}</dl>
+</footer>
+{% endblock %}
+{% block scripts %}
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="{% static 'bones/js/note_filters.js' %}"></script>
+<script>
+(function () {
+  const form = document.querySelector('form[aria-label="Bone census data export filters"]');
+  const summary = document.getElementById('bone-census-filter-summary');
+  if (!form || !summary) return;
+
+  function summaryValue(label) {
+    const term = Array.from(summary.querySelectorAll('dt')).find(node => node.textContent.trim() === label);
+    return term ? term.nextElementSibling : null;
+  }
+
+  function selectedLabels(field, emptyLabel) {
+    const labels = Array.from(field.selectedOptions)
+      .filter(option => option.value)
+      .map(option => option.text.trim())
+      .filter(Boolean);
+    return labels.length ? labels.join(', ') : emptyLabel;
+  }
+
+  function setText(label, value) {
+    const target = summaryValue(label);
+    if (target) target.textContent = value;
+  }
+
+  function setOptionalText(label, value) {
+    let target = summaryValue(label);
+    if (!value) {
+      if (target) {
+        const term = target.previousElementSibling;
+        target.remove();
+        if (term) term.remove();
+      }
+      return;
+    }
+    if (!target) {
+      const term = document.createElement('dt');
+      const strong = document.createElement('strong');
+      target = document.createElement('dd');
+      strong.textContent = label;
+      term.appendChild(strong);
+      summary.appendChild(term);
+      summary.appendChild(target);
+    }
+    target.textContent = value;
+  }
+
+  function updateNoteFilters() {
+    Array.from(summary.querySelectorAll('dt')).forEach(function (term) {
+      if (term.textContent.trim().startsWith('Transect note ')) {
+        const value = term.nextElementSibling;
+        term.remove();
+        if (value) value.remove();
+      }
+    });
+    let index = 0;
+    form.querySelectorAll('[data-note-filter-row]').forEach(function (row) {
+      const note = row.querySelector('[data-note-field="note"]');
+      if (!note || !note.value) return;
+      index += 1;
+      const responses = row.querySelector('[data-note-field="response"]');
+      const term = document.createElement('dt');
+      const strong = document.createElement('strong');
+      const value = document.createElement('dd');
+      strong.textContent = 'Transect note ' + index;
+      term.appendChild(strong);
+      value.textContent = note.options[note.selectedIndex].text.trim() + ': ' + selectedLabels(responses, 'any response');
+      summary.appendChild(term);
+      summary.appendChild(value);
+    });
+  }
+
+  function updateAppliedFilters() {
+    const bindings = [
+      ['Transects', 'transects', 'All completed transects'],
+      ['Transect years', 'years', 'All'],
+      ['Habitats', 'habitats', 'All'],
+      ['Excluded taxa', 'excluded_taxa', 'None']
+    ];
+    bindings.forEach(function (binding) {
+      const field = form.elements[binding[1]];
+      if (field) setText(binding[0], selectedLabels(field, binding[2]));
+    });
+    const reserve = form.elements.reserve;
+    if (reserve) setText('Old reserve', reserve.value ? reserve.options[reserve.selectedIndex].text.trim() : 'Both');
+    const omit = form.elements.omit_unknown_weathering;
+    const normalised = form.elements.use_normalised_weathering;
+    const includeElements = form.elements.include_elements;
+    if (includeElements) setText('Include elements', includeElements.checked ? 'Yes' : 'No');
+    if (omit) setText('Omit unknown weathering', omit.checked ? 'Yes' : 'No');
+    if (normalised) setText('Use normalised weathering', normalised.checked ? 'Yes' : 'No');
+    updateNoteFilters();
+    setOptionalText(
+      '2011 treatment',
+      normalised && normalised.checked ? 'Original weathering class and original maximum age' : ''
+    );
+  }
+
+  form.addEventListener('change', updateAppliedFilters);
+  form.addEventListener('click', function () { window.setTimeout(updateAppliedFilters, 0); });
+  if (window.jQuery) window.jQuery(form).on('select2:select select2:unselect select2:clear', 'select', updateAppliedFilters);
+  updateAppliedFilters();
+}());
+</script>
+{% endblock %}

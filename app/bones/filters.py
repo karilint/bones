@@ -26,6 +26,7 @@ from .forms import (
 )
 from .models import (
     CompletedOccurrence,
+    CompletedOccurrenceInfo,
     CompletedTransect,
     CompletedTransectInfo,
     CompletedWorkflow,
@@ -401,6 +402,58 @@ class CompletedTransectFilterSet(Select2FilterSetMixin, django_filters.FilterSet
         return []
 
 
+def _related_note_choices(info_model):
+    try:
+        detail_values = info_model.objects.values_list(
+            "pre_or_post", "question_text", "response"
+        )
+    except (DatabaseError, ImproperlyConfigured):
+        detail_values = ()
+
+    note_pairs = {}
+    response_map = {}
+    for phase, question, response in detail_values:
+        if not phase or not question:
+            continue
+        key = _note_key(phase, question)
+        note_pairs[key] = f"{phase} / {question}"
+        if response:
+            response_map.setdefault(key, set()).add(response)
+    return {
+        "notes": (
+            ("", "Any phase/question"),
+            *tuple(
+                (key, label)
+                for key, label in sorted(note_pairs.items(), key=lambda item: item[1])
+            ),
+        ),
+        "response_map": {
+            key: tuple((value, value) for value in sorted(values))
+            for key, values in response_map.items()
+        },
+    }
+
+
+def _related_note_rows(note_filters, choices):
+    rows = [
+        {
+            **row,
+            "response_choices": choices["response_map"].get(row["note_key"], ()),
+        }
+        for row in note_filters
+    ]
+    return rows or [
+        {
+            "index": 0,
+            "note_key": "",
+            "phase": "",
+            "question": "",
+            "responses": [],
+            "response_choices": (),
+        }
+    ]
+
+
 class CompletedOccurrenceFilterSet(Select2FilterSetMixin, django_filters.FilterSet):
     """Filters for completed occurrences."""
 
@@ -454,6 +507,85 @@ class CompletedOccurrenceFilterSet(Select2FilterSetMixin, django_filters.FilterS
         self.filters["state"].extra["choices"] = choices
         self.filters["state"].field.choices = choices
         self.filters["state"].field.widget.attrs.setdefault("class", "w3-select")
+        self.transect_note_filter_choices = _related_note_choices(
+            CompletedTransectInfo
+        )
+        self.occurrence_note_filter_choices = _related_note_choices(
+            CompletedOccurrenceInfo
+        )
+        self.transect_note_filters = self._parse_note_filters("transect_note_")
+        self.occurrence_note_filters = self._parse_note_filters("occurrence_note_")
+
+    def filter_queryset(self, queryset):
+        queryset = super().filter_queryset(queryset)
+        queryset = self._apply_note_filters(
+            queryset, self.transect_note_filters, "transect__details"
+        )
+        queryset = self._apply_note_filters(
+            queryset, self.occurrence_note_filters, "details"
+        )
+        if self.transect_note_filters or self.occurrence_note_filters:
+            queryset = queryset.distinct()
+        return queryset
+
+    @property
+    def transect_note_filter_form_rows(self):
+        return _related_note_rows(
+            self.transect_note_filters, self.transect_note_filter_choices
+        )
+
+    @property
+    def occurrence_note_filter_form_rows(self):
+        return _related_note_rows(
+            self.occurrence_note_filters, self.occurrence_note_filter_choices
+        )
+
+    @staticmethod
+    def _apply_note_filters(queryset, note_filters, relation):
+        for note_filter in note_filters:
+            criteria = {}
+            if note_filter["phase"]:
+                criteria[f"{relation}__pre_or_post"] = note_filter["phase"]
+            if note_filter["question"]:
+                criteria[f"{relation}__question_text"] = note_filter["question"]
+            if note_filter["responses"]:
+                criteria[f"{relation}__response__in"] = note_filter["responses"]
+            if criteria:
+                queryset = queryset.filter(**criteria)
+        return queryset
+
+    def _parse_note_filters(self, prefix):
+        if not self.data:
+            return []
+        rows = []
+        for index in range(NOTE_FILTER_MAX_ROWS):
+            row_prefix = f"{prefix}{index}_"
+            note_key = self.data.get(f"{row_prefix}note", "").strip()
+            phase, question = _parse_note_key(note_key)
+            responses = [
+                value.strip()
+                for value in self._getlist(f"{row_prefix}response")
+                if value.strip()
+            ]
+            if phase or question or responses:
+                rows.append(
+                    {
+                        "index": index,
+                        "note_key": note_key,
+                        "phase": phase,
+                        "question": question,
+                        "responses": responses,
+                    }
+                )
+        return rows
+
+    def _getlist(self, key):
+        if hasattr(self.data, "getlist"):
+            return self.data.getlist(key)
+        value = self.data.get(key, [])
+        if isinstance(value, (list, tuple)):
+            return value
+        return [value] if value else []
 
 
 class CompletedWorkflowFilterSet(Select2FilterSetMixin, django_filters.FilterSet):

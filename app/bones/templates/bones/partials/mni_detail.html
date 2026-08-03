@@ -1,0 +1,52 @@
+{% load i18n %}
+<section class="w3-section" aria-labelledby="mni-detail-heading">
+  <header class="w3-margin-bottom">
+    <h3 id="mni-detail-heading" class="w3-large w3-margin-0">
+      <span class="fa-fw fa-solid fa-calculator" aria-hidden="true"></span>
+      {{ mni_heading }}
+    </h3>
+    <p class="w3-text-grey">{{ mni_intro }}</p>
+  </header>
+  {% if not mni_detail.available %}
+    <div class="w3-panel w3-pale-yellow w3-leftbar w3-border-amber" role="status">
+      <p>{{ mni_detail.message }}</p>
+    </div>
+  {% else %}
+    <div class="w3-row-padding w3-margin-bottom" aria-label="{% trans 'MNI summary' %}">
+      <div class="w3-quarter"><div class="w3-card w3-padding"><strong>{% trans "Transect MNI" %}</strong><div class="w3-xlarge">{{ mni_detail.total_mni }}</div></div></div>
+      <div class="w3-quarter"><div class="w3-card w3-padding"><strong>{% trans "Taxa" %}</strong><div class="w3-xlarge">{{ mni_detail.taxon_count }}</div></div></div>
+      <div class="w3-quarter"><div class="w3-card w3-padding"><strong>{% trans "Contributing instances" %}</strong><div class="w3-xlarge">{{ mni_detail.contributing_instance_count }}</div></div></div>
+      <div class="w3-quarter"><div class="w3-card w3-padding"><strong>{% trans "Warnings" %}</strong><div class="w3-xlarge">{{ mni_detail.warning_count }}</div></div></div>
+    </div>
+    {% if mni_detail.taxon_rows %}
+      <div class="w3-responsive">
+        <table class="w3-table-all w3-small">
+          <caption class="w3-hide">{% trans "Transect MNI by taxon" %}</caption>
+          <thead><tr><th>{% trans "Taxon" %}</th><th>{% trans "Occurrences" %}</th><th>{% trans "Transect MNI" %}</th><th>{% trans "Demographic groups" %}</th></tr></thead>
+          <tbody>{% for row in mni_detail.taxon_rows %}<tr>
+            <td>{{ row.taxon }}</td><td>{{ row.occurrence_count }}</td><td>{{ row.mni }}</td>
+            <td>{% for group in row.groups %}{{ group.sex }} / {{ group.age }} / {{ group.weathering }}: {{ group.mni }}{% if not forloop.last %}<br>{% endif %}{% empty %}—{% endfor %}</td>
+          </tr>{% endfor %}</tbody>
+        </table>
+      </div>
+    {% endif %}
+    <h4>{% trans "Skeletal evidence" %}</h4>
+    {% if mni_detail.evidence_rows %}
+      <div class="w3-responsive"><table class="w3-table-all w3-small">
+        <caption class="w3-hide">{% trans "Observations contributing to the MNI calculation" %}</caption>
+        <thead><tr><th>{% trans "Instance" %}</th><th>{% trans "Taxon" %}</th><th>{% trans "Element / side" %}</th><th>{% trans "Complete" %}</th><th>{% trans "Group" %}</th><th>{% trans "Rule" %}</th><th>{% trans "Status" %}</th></tr></thead>
+        <tbody>{% for row in mni_detail.evidence_rows %}<tr>
+          <td><a href="{{ row.instance_url }}">{{ row.instance_number }}</a></td><td>{{ row.taxon }}</td><td>{{ row.element }} / {{ row.side }}</td>
+          <td>{{ row.complete|yesno:"Yes,No" }}</td><td>{{ row.sex }} / {{ row.age }} / {{ row.weathering }}</td>
+          <td>{% if row.divisor %}{% blocktrans with divisor=row.divisor %}Divisor {{ divisor }}{% endblocktrans %}; {% if row.paired %}{% trans "paired" %}{% else %}{% trans "unpaired" %}{% endif %}{% else %}—{% endif %}</td>
+          <td><strong>{{ row.status }}</strong><br><span class="w3-small w3-text-grey">{{ row.reason }}</span></td>
+        </tr>{% endfor %}</tbody>
+      </table></div>
+    {% else %}<p class="w3-text-grey">{% trans "No skeletal evidence is available in this scope." %}</p>{% endif %}
+    {% if mni_detail.warnings %}<h4>{% trans "Warnings" %}</h4><ul class="w3-ul">
+      {% for warning in mni_detail.warnings %}<li><span class="fa-solid fa-triangle-exclamation {% if warning.severity == 'Critical' %}w3-text-red{% else %}w3-text-amber{% endif %}" aria-hidden="true"></span> <strong>{{ warning.category }}</strong> — {{ warning.treatment }}</li>{% endfor %}
+    </ul>{% endif %}
+    {% if mni_detail.report_url %}<p><a class="w3-button w3-border w3-round" href="{{ mni_detail.report_url }}"><span class="fa-solid fa-chart-column" aria-hidden="true"></span> {% trans "Open full MNI report" %}</a></p>{% endif %}
+    <p class="w3-small w3-text-grey">{% trans "MNI is calculated across the complete transect. Occurrence and instance evidence must not be added as independent MNI totals." %}</p>
+  {% endif %}
+</section>

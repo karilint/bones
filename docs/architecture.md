@@ -74,6 +74,18 @@ widgets, and history timelines.
   breadcrumbs so users can review change metadata alongside the related records
   and navigation actions.
 
+## Analytical reports
+
+* `app/bones/views/reports.py` serves authenticated aggregate reports and Excel
+  exports without forcing matrix results into the paginated list archetype.
+* `app/bones/reports/mni.py` contains database-independent MNI calculation
+  rules, while `mni_service.py` extracts and normalises completed survey data.
+* Application-managed `MNIElementRule` and `MNITaxonRule` records make the
+  anatomical divisors, paired-element treatment, canonical taxa, and default
+  exclusions reviewable by staff through Django admin.
+* Report templates under `templates/bones/reports/` use responsive grouped
+  tables, explicit methodology notes, and data-quality drill-down links.
+
 ## Database indexes
 
 * SQL Server runs with unmanaged tables, so performance-sensitive indexes are

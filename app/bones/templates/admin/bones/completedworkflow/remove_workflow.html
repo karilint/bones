@@ -1,0 +1,31 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% block content %}
+  <div id="content-main">
+    <div class="module">
+      <h2>{% trans "Workflow being removed" %}</h2>
+      <table>
+        <tr><th>{% trans "Template transect" %}</th><td>{{ workflow.occurrence.transect.transect_template.name }}</td></tr>
+        <tr><th>{% trans "Transect UID" %}</th><td>{{ workflow.occurrence.transect_id }}</td></tr>
+        <tr><th>{% trans "Occurrence" %}</th><td>{{ workflow.occurrence.occurrence_number }} (ID {{ workflow.occurrence_id }})</td></tr>
+        <tr><th>{% trans "Instance" %}</th><td>{{ workflow.instance_number }}</td></tr>
+        <tr><th>{% trans "Workflow" %}</th><td>{{ workflow.template_workflow.name }} ({{ workflow.pk }})</td></tr>
+        <tr><th>{% trans "Responses to delete" %}</th><td>{{ response_count }}</td></tr>
+        <tr><th>{% trans "Instance images" %}</th><td>{% trans "Retained" %}</td></tr>
+      </table>
+    </div>
+    {% if conflict %}
+      <p class="errornote">{% trans "This is the last workflow in the instance. Use the complete-instance deletion procedure instead." %}</p>
+    {% else %}
+      <form method="post">{% csrf_token %}
+        {{ form.non_field_errors }}
+        <fieldset class="module aligned">
+          {% for field in form %}
+            <div class="form-row"><div>{{ field.errors }}{{ field.label_tag }} {{ field }}{% if field.help_text %}<div class="help">{{ field.help_text }}</div>{% endif %}</div></div>
+          {% endfor %}
+        </fieldset>
+        <div class="submit-row"><input type="submit" value="{% trans 'Remove workflow' %}" class="deletelink"></div>
+      </form>
+    {% endif %}
+  </div>
+{% endblock %}

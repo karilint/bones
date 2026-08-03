@@ -81,3 +81,6 @@ body {
     border-radius: 50%;
     vertical-align: -0.05rem;
 }
+.bones-report-table-wrap { overflow-x: auto; max-width: 100%; }
+.bones-report-table { min-width: 900px; }
+.bones-report-table .bones-sticky-column { position: sticky; left: 0; z-index: 1; background: white; }

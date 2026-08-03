@@ -152,6 +152,15 @@ NAVIGATION_SECTIONS: List[NavigationLink] = [
         ],
     },
     {
+        "label": "Reports",
+        "icon": "fa-solid fa-chart-column",
+        "url_name": "bones:reports:mni",
+        "children": [
+            {"label": "MNI Summary", "url_name": "bones:reports:mni"},
+            {"label": "Bone Census Data", "url_name": "bones:reports:mni_analysis"},
+        ],
+    },
+    {
         "label": "History",
         "icon": "fa-solid fa-clock-rotate-left",
         "url_name": "bones:history:index",

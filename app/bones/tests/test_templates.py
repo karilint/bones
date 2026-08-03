@@ -39,6 +39,34 @@ class TemplateMarkupTests(SimpleTestCase):
         )
         self.assertIn("window.jQuery(list).on('change'", list_html)
         self.assertIn("handleNoteChange(this)", list_html)
+
+    def test_occurrence_note_filters_render_both_reusable_groups(self):
+        partial_html = (
+            self.templates_dir / "partials" / "occurrence_note_filters.html"
+        ).read_text(encoding="utf-8")
+        group_html = (
+            self.templates_dir / "partials" / "note_filter_group.html"
+        ).read_text(encoding="utf-8")
+        list_html = (
+            self.templates_dir / "completed_occurrence_list.html"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('prefix="transect_note_"', partial_html)
+        self.assertIn('prefix="occurrence_note_"', partial_html)
+        self.assertIn("data-note-filter-group", group_html)
+        self.assertIn("multiple", group_html)
+        self.assertIn("bones/js/note_filters.js", list_html)
+        script_html = (
+            Path(__file__).resolve().parents[1]
+            / "static"
+            / "bones"
+            / "js"
+            / "note_filters.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn("window.jQuery(list).on(", script_html)
+        self.assertIn("function () { handleNoteChange(this); }", script_html)
+
+
 class MapInteractionAssetTests(SimpleTestCase):
     def test_shared_map_script_enables_hover_popups(self):
         from pathlib import Path

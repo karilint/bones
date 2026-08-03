@@ -144,7 +144,10 @@
                     return window.L.circleMarker(latlng, options);
                 },
                 onEachFeature: function (feature, featureLayer) {
-                    featureLayer.bindPopup(popupContent(feature.properties || {}));
+                    featureLayer.bindPopup(
+                        popupContent(feature.properties || {}),
+                        {autoPan: false}
+                    );
                     bindHoverPopup(featureLayer);
                 }
             }).addTo(map);

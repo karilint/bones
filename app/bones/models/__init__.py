@@ -1,5 +1,5 @@
 """Domain models for the bones application."""
-from .audit import InstanceDeletion, TransectDeletion
+from .audit import InstanceDeletion, OccurrenceDeletion, TransectDeletion
 from .completed import (  # noqa: F401
     CompletedOccurrence,
     CompletedOccurrenceInfo,
@@ -21,6 +21,7 @@ from .templates import (  # noqa: F401
     TemplateTransect,
     TemplateWorkflow,
 )
+from .reports import MNIElementRule, MNITaxonRule, MNIWeatheringRule  # noqa: F401
 
 __all__ = [
     "CompletedOccurrence",
@@ -34,6 +35,7 @@ __all__ = [
     "EntityImageTarget",
     "ImageImportBatch",
     "InstanceDeletion",
+    "OccurrenceDeletion",
     "TransectDeletion",
     "DataLogFile",
     "DataType",
@@ -43,5 +45,8 @@ __all__ = [
     "TemplateTransect",
     "TemplateWorkflow",
     "TransectDataLog",
+    "MNIElementRule",
+    "MNITaxonRule",
+    "MNIWeatheringRule",
 ]
 from .images import EntityImage, EntityImageTarget, ImageImportBatch  # noqa: F401

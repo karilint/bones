@@ -61,6 +61,36 @@ For any non-trivial feature, bug fix, refactor, migration, or test change:
 For very small requests, Codex may skip writing out a formal plan, but it must
 still inspect the relevant code before editing.
 
+## Windows Local Tooling
+
+This repository is commonly edited from Windows under a Group Policy that may
+block Codex's filesystem sandbox helper. If the normal `apply_patch` tool fails
+with `CreateProcessWithLogonW 1385`, `CreateProcessAsUserW 1260`, or a message
+that the filesystem helper is blocked by policy, do not keep retrying the same
+launcher and do not switch to `Set-Content`, `WriteAllText`, Python file writes,
+or other direct rewriting commands.
+
+Use the established elevated Codex patch-engine fallback instead:
+
+1. Request escalation for the patch operation.
+2. Resolve the installed patch launcher with `Get-Command apply_patch` and read
+   its source to obtain the current VS Code extension's `codex.exe` path. Do not
+   hard-code the extension version.
+3. Invoke that executable with `--codex-run-as-apply-patch`, passing the normal
+   `*** Begin Patch` / `*** End Patch` payload as one argument.
+4. In PowerShell, normalize the patch to LF, trim trailing newlines, and escape
+   literal double quotes before invoking the native executable so the quotes
+   survive Windows argument parsing.
+5. Keep each patch payload small (preferably under roughly 6,000 characters) to
+   avoid Windows command-line truncation. Split larger changes into atomic
+   patches with class- or function-specific context.
+6. Inspect `git diff` after each split patch. Generic context such as a repeated
+   `get_queryset()` or state-widget line can match the wrong class.
+
+The local `.env` may contain a non-numeric deployment value for `DEBUG`. Prefix
+local Django validation with `$env:DEBUG='0'` so settings import reliably, for
+example `$env:DEBUG='0'; .venv\Scripts\python.exe app\manage.py test ...`.
+
 ## Django Architecture Rules
 
 - Prefer existing class-based view archetypes over creating unrelated view

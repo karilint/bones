@@ -9,6 +9,7 @@ from django.test import RequestFactory, SimpleTestCase
 from django.views.generic import ListView
 
 from ..filters import (
+    CompletedOccurrenceFilterSet,
     CompletedTransectFilterSet,
     FilteredListViewMixin,
     TemplateTransectFilterSet,
@@ -24,6 +25,69 @@ class DummyFilterSet(django_filters.FilterSet):
     class Meta:
         model = CompletedTransect
         fields = []
+
+
+class CompletedOccurrenceNoteFilterTests(SimpleTestCase):
+    def test_parses_transect_and_occurrence_note_namespaces_independently(self):
+        data = QueryDict(mutable=True)
+        data["transect_note_0_note"] = _note_key("Pre", "Habitat")
+        data.setlist("transect_note_0_response", ["Grass", "Heath"])
+        data["occurrence_note_0_note"] = _note_key("Post", "Condition")
+
+        filterset = CompletedOccurrenceFilterSet.__new__(
+            CompletedOccurrenceFilterSet
+        )
+        filterset.data = data
+
+        self.assertEqual(
+            filterset._parse_note_filters("transect_note_")[0]["responses"],
+            ["Grass", "Heath"],
+        )
+        occurrence_row = filterset._parse_note_filters("occurrence_note_")[0]
+        self.assertEqual(occurrence_row["phase"], "Post")
+        self.assertEqual(occurrence_row["question"], "Condition")
+
+    @patch("django_filters.FilterSet.filter_queryset")
+    def test_applies_both_note_groups_and_distincts(self, mock_base_filter):
+        filterset = CompletedOccurrenceFilterSet.__new__(
+            CompletedOccurrenceFilterSet
+        )
+        filterset.transect_note_filters = [
+            {
+                "phase": "Pre",
+                "question": "Habitat",
+                "responses": ["Grass", "Heath"],
+            }
+        ]
+        filterset.occurrence_note_filters = [
+            {
+                "phase": "Post",
+                "question": "Condition",
+                "responses": ["Good"],
+            }
+        ]
+        queryset = MagicMock()
+        transect_filtered = MagicMock()
+        occurrence_filtered = MagicMock()
+        queryset.filter.return_value = transect_filtered
+        transect_filtered.filter.return_value = occurrence_filtered
+        occurrence_filtered.distinct.return_value = "distinct-queryset"
+        mock_base_filter.return_value = queryset
+
+        result = filterset.filter_queryset(queryset)
+
+        queryset.filter.assert_called_once_with(
+            transect__details__pre_or_post="Pre",
+            transect__details__question_text="Habitat",
+            transect__details__response__in=["Grass", "Heath"],
+        )
+        transect_filtered.filter.assert_called_once_with(
+            details__pre_or_post="Post",
+            details__question_text="Condition",
+            details__response__in=["Good"],
+        )
+        occurrence_filtered.distinct.assert_called_once_with()
+        self.assertEqual(result, "distinct-queryset")
 
 
 class DummyListView(FilteredListViewMixin, ListView):

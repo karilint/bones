@@ -184,6 +184,31 @@ class CompletedOccurrenceListViewTests(SimpleTestCase):
             has_perms=lambda perms: True,
         )
 
+    @patch("bones.views.lists.BonesListView.get_context_data")
+    def test_context_exposes_both_note_filter_groups(self, mock_base_context):
+        filterset = SimpleNamespace(
+            transect_note_filter_form_rows=[{"index": 0}],
+            transect_note_filter_choices={"notes": ()},
+            occurrence_note_filter_form_rows=[{"index": 0}],
+            occurrence_note_filter_choices={"notes": ()},
+        )
+        mock_base_context.return_value = {"filter": filterset}
+
+        context = CompletedOccurrenceListView().get_context_data()
+
+        self.assertEqual(
+            context["filter_extra_template"],
+            "bones/partials/occurrence_note_filters.html",
+        )
+        self.assertIs(
+            context["transect_note_filter_rows"],
+            filterset.transect_note_filter_form_rows,
+        )
+        self.assertIs(
+            context["occurrence_note_filter_rows"],
+            filterset.occurrence_note_filter_form_rows,
+        )
+
     @patch("bones.views.lists.CompletedOccurrenceFilterSet")
     @patch("bones.views.lists.CompletedOccurrence.objects")
     def test_queryset_annotates_response_counts(self, mock_manager, mock_filterset):

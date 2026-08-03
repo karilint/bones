@@ -35,6 +35,7 @@ class MasterDetailViewTests(SimpleTestCase):
         tabs = list(view.get_tabs())
         tab_ids = [tab["id"] for tab in tabs]
         self.assertIn("history", tab_ids)
+        self.assertIn("mni", tab_ids)
         self.assertIn("images", tab_ids)
         self.assertIn("map", tab_ids)
         self.assertEqual(
@@ -114,6 +115,7 @@ class MasterDetailViewTests(SimpleTestCase):
         view = CompletedOccurrenceDetailView()
         self.assertIn("images", [tab["id"] for tab in view.get_tabs()])
         self.assertIn("map", [tab["id"] for tab in view.get_tabs()])
+        self.assertIn("mni", [tab["id"] for tab in view.get_tabs()])
     def test_completed_occurrence_related_tab_is_named_instances(self):
         view = CompletedOccurrenceDetailView()
         tabs = list(view.get_tabs())
@@ -254,6 +256,72 @@ class MasterDetailViewTests(SimpleTestCase):
             )
 
         self.assertEqual(summaries[0]["images"], [image])
+
+    def test_occurrence_instance_responses_can_be_filtered_by_question(self):
+        workflow = SimpleNamespace(
+            pk=1,
+            template_workflow=SimpleNamespace(name="Bones"),
+            instance_number=1,
+            completed_by="Alice",
+        )
+        responses = [
+            SimpleNamespace(question_number=1,question_text="What element is this?",response="Femur",response_code="femur",skipped=False,workflow=workflow),
+            SimpleNamespace(question_number=2,question_text="Side",response="Left",response_code="left",skipped=False,workflow=workflow),
+            SimpleNamespace(question_number=3,question_text="Weathering class",response="2",response_code="2",skipped=False,workflow=workflow),
+            SimpleNamespace(question_number=4,question_text="Other question",response="Hidden",response_code="hidden",skipped=False,workflow=workflow),
+        ]
+        view = CompletedOccurrenceDetailView()
+        view.object = SimpleNamespace(pk=42)
+
+        with patch("bones.views.master_detail.safe_reverse", return_value="/workflows/"):
+            summaries = view.get_instance_summaries(
+                workflows=[workflow],
+                responses=responses,
+                question_texts={"What element is this?", "Side", "Weathering class"},
+            )
+
+        self.assertEqual(
+            [row[0]["value"] for row in summaries[0]["response_rows"]],
+            ["What element is this?", "Side", "Weathering class"],
+        )
+
+    def test_response_question_choices_are_unique_sorted_and_skip_hidden_answers(self):
+        choices = CompletedOccurrenceDetailView.get_response_question_choices([
+            SimpleNamespace(question_text="Side",skipped=False),
+            SimpleNamespace(question_text="Weathering class",skipped=False),
+            SimpleNamespace(question_text="Side",skipped=False),
+            SimpleNamespace(question_text="Skipped",skipped=True),
+        ])
+
+        self.assertEqual(choices,["Side","Weathering class"])
+
+    def test_occurrence_instances_can_be_filtered_by_question_response_pair(self):
+        workflows = [
+            SimpleNamespace(pk=1,template_workflow=SimpleNamespace(name="Bones"),instance_number=1,completed_by="Alice"),
+            SimpleNamespace(pk=2,template_workflow=SimpleNamespace(name="Bones"),instance_number=2,completed_by="Bob"),
+        ]
+        responses = [
+            SimpleNamespace(question_number=1,question_text="What element is this?",response="Humerus",response_code="humerus",skipped=False,workflow=workflows[0]),
+            SimpleNamespace(question_number=1,question_text="What element is this?",response="Femur",response_code="femur",skipped=False,workflow=workflows[1]),
+        ]
+        view = CompletedOccurrenceDetailView()
+        view.object = SimpleNamespace(pk=42)
+
+        with patch("bones.views.master_detail.safe_reverse", return_value="/workflows/"):
+            summaries = view.get_instance_summaries(
+                workflows=workflows,
+                responses=responses,
+                match_question="What element is this?",
+                match_response="humerus",
+            )
+
+        self.assertEqual([summary["number"] for summary in summaries],[1])
+
+    def test_default_response_questions_match_requested_rows(self):
+        self.assertEqual(
+            CompletedOccurrenceDetailView.default_response_questions,
+            ("What element is this?","Complete?","Side","Weathering class"),
+        )
 
     def test_instance_image_gallery_is_read_only(self):
         image = SimpleNamespace(

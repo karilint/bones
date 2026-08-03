@@ -40,6 +40,7 @@ from .master_detail import (
     CompletedOccurrenceDetailView,
     CompletedTransectDetailView,
 )
+from .reports import MNIAnalysisExportView, MNISummaryView
 
 __all__ = [
     "DashboardView",
@@ -74,4 +75,6 @@ __all__ = [
     "QuestionHistoryListView",
     "QuestionHistoryRecordView",
     "QuestionHistoryEntryView",
+    "MNISummaryView",
+    "MNIAnalysisExportView",
 ]

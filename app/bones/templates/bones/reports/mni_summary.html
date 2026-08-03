@@ -1,0 +1,52 @@
+{% extends "bones/base.html" %}
+{% load i18n static %}
+{% block title %}{{ page_title }} - Bones{% endblock %}
+{% block head_extra %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
+{% endblock %}
+{% block main %}
+<header class="w3-margin-bottom">
+  <h2><span class="fa-solid fa-chart-column" aria-hidden="true"></span> {{ page_title }}</h2>
+  <p>Occurrence composition and minimum numbers of individuals, calculated from current completed data.</p>
+</header>
+{% if report_error %}<div class="w3-panel w3-pale-red w3-border w3-border-red" role="alert">The report is temporarily unavailable: {{ report_error }}</div>{% endif %}
+<form method="get" class="w3-card w3-white w3-padding w3-margin-bottom" aria-label="MNI report filters">
+  <div class="w3-row-padding">
+    {% for field in form %}
+    <div class="w3-col s12 m6 l4 w3-margin-bottom">
+      <label class="w3-text-grey w3-small" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}
+      {% for error in field.errors %}<span class="w3-text-red w3-small">{{ error }}</span>{% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+  {% include "bones/partials/note_filter_group.html" with group_id="mni-transect-notes" title="Transect note filters" prefix="note_" rows=note_filter.note_filter_form_rows choices=note_filter.note_filter_choices response_map_id="mni-note-response-map" max_rows=10 %}
+  <button class="w3-button w3-blue" type="submit"><span class="fa fa-filter" aria-hidden="true"></span> Apply filters</button>
+  <a class="w3-button w3-white w3-border" href="{% url 'bones:reports:mni' %}"><span class="fa fa-eraser" aria-hidden="true"></span> Clear</a>
+</form>
+{% if result %}
+<section aria-labelledby="mni-results">
+  <div class="w3-row w3-margin-bottom">
+    <div class="w3-col s12 m8"><h3 id="mni-results">Results</h3><p>{{ filter_summary }}</p></div>
+    <div class="w3-col s12 m4 w3-right-align"><a class="w3-button w3-green" href="?{{ export_query }}"><span class="fa-solid fa-file-excel" aria-hidden="true"></span> Export Excel</a></div>
+  </div>
+  <div class="bones-report-table-wrap" tabindex="0" aria-label="Scrollable MNI summary table">
+    <table class="w3-table-all w3-small bones-report-table">
+      <caption class="w3-hide">MNI and occurrence counts by taxon and habitat</caption>
+      <thead><tr><th rowspan="2" scope="col" class="bones-sticky-column">Taxon</th><th colspan="4" scope="colgroup">All data</th>{% for habitat in result.habitats %}<th colspan="4" scope="colgroup">{{ habitat }}</th>{% endfor %}</tr>
+      <tr><th>Occurrence n</th><th>Occurrence %</th><th>MNI n</th><th>MNI %</th>{% for habitat in result.habitats %}<th>Occurrence n</th><th>Occurrence %</th><th>MNI n</th><th>MNI %</th>{% endfor %}</tr></thead>
+      <tbody>{% for row in result.rows %}<tr><th scope="row" class="bones-sticky-column">{{ row.taxon }}</th>
+        <td>{{ row.occurrence_all.count }}</td><td>{{ row.occurrence_all.percent|floatformat:2 }}</td>
+        <td>{% if row.mni_all.excluded %}Excluded{% else %}{{ row.mni_all.count }}{% if row.mni_all.warning %} <span class="fa-solid fa-triangle-exclamation w3-text-red" title="MNI exceeds occurrence count" aria-label="MNI exceeds occurrence count"></span>{% endif %}{% endif %}</td><td>{% if row.mni_all.excluded %}—{% else %}{{ row.mni_all.percent|floatformat:2 }}{% endif %}</td>
+        {% for habitat in row.habitats %}<td>{{ habitat.occurrence.count }}</td><td>{{ habitat.occurrence.percent|floatformat:2 }}</td><td>{% if habitat.mni.excluded %}Excluded{% else %}{{ habitat.mni.count }}{% if habitat.mni.warning %} <span class="fa-solid fa-triangle-exclamation w3-text-red" title="MNI exceeds occurrence count" aria-label="MNI exceeds occurrence count"></span>{% endif %}{% endif %}</td><td>{% if habitat.mni.excluded %}—{% else %}{{ habitat.mni.percent|floatformat:2 }}{% endif %}</td>{% endfor %}
+      </tr>{% endfor %}</tbody>
+    </table>
+  </div>
+</section>
+<section class="w3-margin-top" aria-labelledby="warnings-title"><h3 id="warnings-title">Data-quality warnings ({{ result.warnings|length }})</h3>
+  {% if result.warnings %}<div class="w3-responsive"><table class="w3-table-all w3-small"><thead><tr><th>Severity</th><th>Issue</th><th>Workflow</th><th>Transect UID</th><th>Transect</th><th>Occurrence</th><th>Instances</th><th>Taxon</th><th>Habitat</th><th>Element / side</th><th>Occurrence n</th><th>MNI n</th><th>Raw value</th><th>Treatment</th></tr></thead><tbody>
+  {% for warning in result.warnings %}<tr><td><span class="fa-solid fa-triangle-exclamation {% if warning.severity == 'Critical' %}w3-text-red{% else %}w3-text-amber{% endif %}" aria-hidden="true"></span> {{ warning.severity|default:"Warning" }}</td><td>{{ warning.category }}</td><td>{{ warning.workflow|default:"—" }}</td><td>{{ warning.transect_id|default:"—" }}</td><td>{{ warning.transect|default:"—" }}</td><td>{% if warning.url %}<a href="{{ warning.url }}">{{ warning.occurrence_id|default:"Open record" }}</a>{% else %}{{ warning.occurrence_id|default:"—" }}{% endif %}</td><td>{% if warning.instance_numbers %}{{ warning.instance_numbers|join:", " }}{% else %}{{ warning.instance_number|default:"—" }}{% endif %}</td><td>{{ warning.taxon|default:"—" }}</td><td>{{ warning.habitat|default:"—" }}</td><td>{{ warning.element_side|default:"—" }}</td><td>{{ warning.occurrence_n|default_if_none:"—" }}</td><td>{{ warning.mni_n|default_if_none:"—" }}</td><td>{{ warning.raw_value|default:"—" }}</td><td>{{ warning.treatment }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<p>No warnings.</p>{% endif %}
+</section>
+<aside class="w3-panel w3-pale-blue w3-border w3-margin-top" aria-labelledby="method-title"><h3 id="method-title">Methodology</h3><ul>{% for note in methodology %}<li>{{ note }}</li>{% endfor %}<li>{{ filter_summary }}</li></ul></aside>
+{% endif %}
+{% endblock %}
+{% block scripts %}<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script><script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script><script src="{% static 'bones/js/note_filters.js' %}"></script>{% endblock %}

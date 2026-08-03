@@ -33,6 +33,8 @@ from .views import (
     EntityImageHistoryListView,
     EntityImageHistoryRecordView,
     HistoryIndexView,
+    MNISummaryView,
+    MNIAnalysisExportView,
     ProjectConfigDetailView,
     ProjectConfigListView,
     QuestionDetailView,
@@ -164,6 +166,11 @@ history_patterns = (
     "history",
 )
 
+report_patterns = ([
+    path("mni/", MNISummaryView.as_view(), name="mni"),
+    path("mni-analysis/", MNIAnalysisExportView.as_view(), name="mni_analysis"),
+], "reports")
+
 urlpatterns = [
     path(
         "",
@@ -180,6 +187,7 @@ urlpatterns = [
     path("reference/", include(reference_patterns)),
     path("logs/", include(log_patterns)),
     path("history/", include(history_patterns)),
+    path("reports/", include(report_patterns)),
     path("select2/", include("django_select2.urls")),
     path("images/upload/<str:entity_type>/<path:entity_id>/", ImageUploadView.as_view(), name="image_upload"),
     path("images/<uuid:pk>/delete/", ImageDeleteView.as_view(), name="image_delete"),

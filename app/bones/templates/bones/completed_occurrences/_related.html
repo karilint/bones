@@ -1,4 +1,49 @@
 {% load i18n %}
+{% if response_question_choices %}
+        <section class="w3-section w3-card w3-padding" aria-labelledby="response-question-filter-heading">
+            <h3 id="response-question-filter-heading" class="w3-large w3-margin-top">
+                <span class="fa-fw fa-solid fa-filter" aria-hidden="true"></span>
+                {% trans "Filter responses by question" %}
+            </h3>
+            <form method="get" action="#related">
+                <input type="hidden" name="response_filter_applied" value="1">
+                <label for="response-question-filter">{% trans "Questions to show" %}</label>
+                <select id="response-question-filter" name="response_question" class="w3-select w3-border" multiple size="6" aria-describedby="response-question-filter-help">
+                    {% for question in response_question_choices %}
+                        <option value="{{ question }}"{% if question in selected_response_questions %} selected{% endif %}>{{ question }}</option>
+                    {% endfor %}
+                </select>
+                <p id="response-question-filter-help" class="w3-small w3-text-grey">
+                    {% trans "Choose one or more questions. With no selection, all responses are shown." %}
+                </p>
+                <div class="w3-row-padding">
+                    <div class="w3-half">
+                        <label for="match-question">{% trans "Only instances where question" %}</label>
+                        <select id="match-question" name="match_question" class="w3-select w3-border">
+                            <option value="">{% trans "Any question" %}</option>
+                            {% for question in response_question_choices %}
+                                <option value="{{ question }}"{% if question == match_question %} selected{% endif %}>{{ question }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="w3-half">
+                        <label for="match-response">{% trans "Has response" %}</label>
+                        <input id="match-response" name="match_response" value="{{ match_response }}" class="w3-input w3-border" list="response-value-options" placeholder="{% trans 'For example, humerus' %}">
+                        <datalist id="response-value-options">
+                            {% for response_value in response_value_choices %}<option value="{{ response_value }}">{% endfor %}
+                        </datalist>
+                    </div>
+                </div>
+                <button type="submit" class="w3-button w3-blue w3-round">
+                    <span class="fa-solid fa-filter" aria-hidden="true"></span>
+                    {% trans "Apply filter" %}
+                </button>
+                <a href="{{ request.path }}?response_filter_applied=1#related" class="w3-button w3-white w3-border w3-round">
+                    {% trans "Show all" %}
+                </a>
+            </form>
+        </section>
+{% endif %}
 {% if occurrence_instances %}
     {% for instance in occurrence_instances %}
         <section class="w3-section">
@@ -24,6 +69,12 @@
     {% endfor %}
 {% else %}
     <section class="w3-section">
-        <p class="w3-text-grey">{% trans "No related workflows or responses were recorded for this occurrence." %}</p>
+        <p class="w3-text-grey">
+            {% if match_question and match_response %}
+                {% trans "No instances match the selected question and response." %}
+            {% else %}
+                {% trans "No related workflows or responses were recorded for this occurrence." %}
+            {% endif %}
+        </p>
     </section>
 {% endif %}

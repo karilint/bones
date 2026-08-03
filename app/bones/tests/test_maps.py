@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -156,6 +157,10 @@ class MapDataViewTests(SimpleTestCase):
         kinds = [feature["properties"]["kind"] for feature in json.loads(response.content)["features"]]
         self.assertEqual(kinds.count("selected_occurrence"), 1)
         self.assertIn("parent_track", kinds)
+
+    def test_map_hover_popups_do_not_recenter_during_zoom(self):
+        script=(Path(__file__).resolve().parents[1]/"static"/"bones"/"js"/"maps.js").read_text(encoding="utf-8")
+        self.assertIn("{autoPan: false}",script)
 
 
     @override_settings(MAP_DATA_CACHE_TIMEOUT=60, MAP_DATA_CACHE_VERSION=99)
