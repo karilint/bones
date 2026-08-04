@@ -117,3 +117,28 @@ class OccurrenceDeletion(models.Model):
 
     def __str__(self):
         return f"Occurrence {self.occurrence_number} ({self.occurrence_id})"
+
+
+class OccurrenceInfoImportBatch(models.Model):
+    """Audit record for a reviewed bulk update of occurrence-info answers."""
+
+    STATUS_CHOICES = (("preview", "Preview"), ("completed", "Completed"), ("failed", "Failed"))
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    original_filename = models.CharField(max_length=255)
+    file_checksum = models.CharField(max_length=64, db_index=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="preview")
+    summary = models.JSONField(default=dict, blank=True, encoder=DjangoJSONEncoder)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="bones_occurrence_info_imports",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        permissions = (("run_occurrence_info_import", "Can import occurrence-info answers"),)
+
+    def __str__(self):
+        return f"{self.original_filename} ({self.created_at:%Y-%m-%d %H:%M})"

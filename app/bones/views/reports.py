@@ -14,8 +14,10 @@ from openpyxl.styles import Font
 from openpyxl.utils import get_column_letter
 
 from ..filters import CompletedTransectFilterSet
-from ..forms_reports import BoneCensusExportForm, MNIReportForm
+from ..forms_reports import BoneCensusExportForm, DataReconciliationReportForm, MNIReportForm
+from ..management.commands.reconcile_data_logs import collect_reconciliation_rows, filter_reconciliation_rows
 from ..models import CompletedTransect
+from ..reports.data_log_reconciliation import workbook_bytes
 from ..reports.mni_service import build_report
 from .mixins import BonesAuthMixin
 
@@ -371,4 +373,52 @@ class MNIAnalysisExportView(BonesAuthMixin, TemplateView):
             "page_title": "Bone Census Data", "form": form,
             "note_filter": note_filter, "report_error": report_error,
             "filter_rows": filter_rows,
+        })
+
+
+class DataReconciliationReportView(BonesAuthMixin, TemplateView):
+    """Download a filtered, read-only comparison of field logs and database data."""
+
+    template_name = "bones/reports/data_reconciliation.html"
+    permission_required = "bones.run_data_reconciliation_report"
+
+    def get(self, request, *args, **kwargs):
+        form = DataReconciliationReportForm(data=request.GET or None)
+        report_error = ""
+        if request.GET.get("export") == "xlsx" and form.is_valid():
+            selected = form.cleaned_data
+            options = {
+                "from_year": selected.get("from_year"),
+                "to_year": selected.get("to_year"),
+                "log_ids": [item.pk for item in selected.get("logs") or []],
+                "gps_required_from_year": selected.get("gps_required_from_year"),
+            }
+            try:
+                rows, _ = collect_reconciliation_rows(options)
+                filter_reconciliation_rows(rows, selected["statuses"])
+                recovery_statuses = set(selected["recovery_statuses"])
+                rows["Recovery candidates"] = [row for row in rows["Recovery candidates"] if row[2] in recovery_statuses]
+                generated = timezone.localtime()
+                user_label = request.user.get_full_name().strip() or request.user.get_username()
+                applied = [
+                    ["Requested by", user_label],
+                    ["Requested at", generated.isoformat(timespec="seconds")],
+                    ["From year", selected.get("from_year") or "All"],
+                    ["To year", selected.get("to_year") or "All"],
+                    ["Selected logs", ", ".join(str(item.pk) for item in selected.get("logs") or []) or "All"],
+                    ["Included statuses", ", ".join(selected["statuses"])],
+                    ["Included recovery statuses", ", ".join(selected["recovery_statuses"])],
+                    ["Included sheets", ", ".join(selected["contents"])],
+                ]
+                rows["Summary"].extend(applied)
+                rows["Methodology"].extend([["Applied filter", f"{label}: {value}"] for label, value in applied])
+                payload = workbook_bytes(rows, selected["contents"])
+                response = HttpResponse(payload, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                response["Content-Disposition"] = f'attachment; filename="data-reconciliation-{generated:%Y-%m-%d-%H%M}.xlsx"'
+                return response
+            except (DatabaseError, ImproperlyConfigured):
+                report_error = "The reconciliation database is temporarily unavailable. Please try again later."
+        return self.render_to_response({
+            "page_title": "Data reconciliation", "form": form,
+            "report_error": report_error,
         })

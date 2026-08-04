@@ -22,17 +22,17 @@ def parse_filename(filename):
         and all(part.isdigit() for part in parts[1:3])
         and re.fullmatch(r"\d+-\d+", parts[3])
     ):
-        template, uid, occurrence, instance_range = parts
+        transect_name, uid, occurrence, instance_range = parts
         first, last = (int(value) for value in instance_range.split("-", 1))
         if first < 1 or last < first or last - first + 1 > 250:
             return "invalid_instance_range", {
-                "template_name": template,
+                "transect_name": transect_name,
                 "transect_uid": int(uid),
                 "occurrence_number": int(occurrence),
                 "instance_range": instance_range,
             }
         return "instance_range", {
-            "template_name": template,
+            "transect_name": transect_name,
             "transect_uid": int(uid),
             "occurrence_number": int(occurrence),
             "instance_range": instance_range,
@@ -40,9 +40,9 @@ def parse_filename(filename):
         }
 
     if len(parts) == 4 and parts[0] and all(part.isdigit() for part in parts[1:]):
-        template, uid, occurrence, instance = parts
+        transect_name, uid, occurrence, instance = parts
         return "full_hierarchy", {
-            "template_name": template,
+            "transect_name": transect_name,
             "transect_uid": int(uid),
             "occurrence_number": int(occurrence),
             "instance_number": int(instance),
@@ -52,15 +52,15 @@ def parse_filename(filename):
     if len(parts) >= 3 and parts[0].isdigit() and parts[-1].isdigit() and len(parts[-1]) == 2:
         return "historical_occurrence", {
             "occurrence_number": int(parts[0]),
-            "template_name": ".".join(parts[1:-1]),
+            "transect_name": ".".join(parts[1:-1]),
             "year": 2000 + int(parts[-1]),
         }
 
     match = re.fullmatch(r"(.+)_(\d+)_(Start.*|Turn.*)", stem, re.IGNORECASE)
     if match:
-        template, uid, label = match.groups()
+        transect_name, uid, label = match.groups()
         return "transect_location", {
-            "template_name": template,
+            "transect_name": transect_name,
             "transect_uid": int(uid),
             "photo_role": "start" if label.casefold().startswith("start") else "turn",
             "source_label": label,
@@ -71,6 +71,7 @@ def parse_filename(filename):
 def canonical_metadata(transect):
     template_name = transect.transect_template.name if transect.transect_template else "Unknown template"
     return {
+        "transect_name": transect.name,
         "template_name": template_name,
         "template_folder": safe_template_folder(template_name),
         "transect_uid": transect.pk,
@@ -78,8 +79,8 @@ def canonical_metadata(transect):
     }
 
 
-def _template_matches(transect, name):
-    return transect.transect_template is not None and norm(transect.transect_template.name) == norm(name)
+def _transect_name_matches(transect, name):
+    return norm(transect.name) == norm(name)
 
 
 def resolve_filename(filename):
@@ -88,17 +89,20 @@ def resolve_filename(filename):
     if schema in {"unknown", "invalid_instance_range"}:
         return result
 
-    source_template_name = data.get("template_name", "")
+    source_transect_name = data.get("transect_name", "")
     if schema in {"full_hierarchy", "instance_range", "transect_location"}:
         try:
             transect = CompletedTransect.objects.select_related("transect_template").get(pk=data["transect_uid"])
         except CompletedTransect.DoesNotExist:
             result["status"] = "unmatched"
             return result
-        if not _template_matches(transect, source_template_name):
-            result["status"] = "template_mismatch"
+        if not _transect_name_matches(transect, source_transect_name):
+            result["status"] = "transect_name_mismatch"
+            result["actual_transect_name"] = transect.name
+            result["actual_template_name"] = transect.transect_template.name if transect.transect_template else "Unknown template"
+            result["transect_uid"] = transect.pk
             return result
-        data["source_template_name"] = source_template_name
+        data["source_transect_name"] = source_transect_name
         data.update(canonical_metadata(transect))
         if schema == "transect_location":
             result.update(status="ready", entity_type="transect", entity_id=str(transect.pk))
@@ -155,12 +159,12 @@ def resolve_filename(filename):
         transect__start_time__year=data["year"],
     )
     for occurrence in queryset:
-        if _template_matches(occurrence.transect, source_template_name):
+        if _transect_name_matches(occurrence.transect, source_transect_name):
             metadata = canonical_metadata(occurrence.transect)
             candidates.append(
                 {
                     "id": occurrence.pk,
-                    "label": f"{metadata['template_name']} — {metadata['transect_date']} — transect {occurrence.transect_id}, occurrence {occurrence.occurrence_number}",
+                    "label": f"Transect {metadata['transect_name']} — template {metadata['template_name']} — {metadata['transect_date']} — UID {occurrence.transect_id}, occurrence {occurrence.occurrence_number}",
                     **metadata,
                 }
             )
@@ -169,7 +173,7 @@ def resolve_filename(filename):
         candidate = candidates[0]
         data.update(candidate)
         data["occurrence_id"] = candidate["id"]
-        data["source_template_name"] = source_template_name
+        data["source_transect_name"] = source_transect_name
         result.update(status="ready", entity_type="occurrence", entity_id=str(candidate["id"]))
     elif candidates:
         result["status"] = "ambiguous"

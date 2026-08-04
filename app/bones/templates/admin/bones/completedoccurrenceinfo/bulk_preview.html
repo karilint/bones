@@ -1,0 +1,27 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<main>
+  <p><strong>{{ batch.original_filename }}</strong> — ready: {{ counts.ready }}, unchanged: {{ counts.unchanged }}, duplicates: {{ counts.duplicate }}, errors: {{ counts.error }}.</p>
+  <p>The current answer is shown for review but is not an update precondition.</p>
+  <div class="results">
+    <table>
+      <thead><tr><th>Row</th><th>Completed transect</th><th>Resolved transect</th><th>Occurrence</th><th>Phase</th><th>Question</th><th>Current</th><th>New</th><th>Comment</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for item in items %}
+        <tr class="{% if item.status == 'error' %}errors{% endif %}">
+          <td>{{ item.row_number }}</td><td>{{ item.completed_transect_name }}</td>
+          <td>{% if item.transect_uid %}{{ item.transect_name }} ({{ item.transect_uid }}){% else %}—{% endif %}</td>
+          <td>{{ item.occurrence_number }}</td><td>{{ item.pre_or_post }}</td><td>{{ item.question_text }}</td>
+          <td>{{ item.current_response|default:"—" }}</td><td>{{ item.canonical_new_response|default:item.new_response }}</td>
+          <td>{{ item.update_comment }}</td><td><strong>{{ item.status }}</strong>: {{ item.message }}</td>
+        </tr>
+      {% empty %}<tr><td colspan="10">The workbook contains no update rows.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if can_apply %}
+    <form method="post">{% csrf_token %}<p><input type="submit" value="Confirm and apply updates" class="default"></p></form>
+  {% elif counts.error %}<p class="errornote">Correct all errors in the workbook and upload it again.</p>
+  {% else %}<p>No changes are available to apply.</p>{% endif %}
+</main>
+{% endblock %}

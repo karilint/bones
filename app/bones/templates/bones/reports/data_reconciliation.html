@@ -1,0 +1,48 @@
+{% extends "bones/base.html" %}
+{% load i18n %}
+{% block title %}{{ page_title }} - Bones{% endblock %}
+{% block main %}
+<header class="w3-margin-bottom">
+  <h2><span class="fa-solid fa-scale-balanced" aria-hidden="true"></span> {{ page_title }}</h2>
+  <p>Compare field logs with current records, deletion audits, history, and GPS tracks. The download is read-only and a complete all-years report may take several minutes.</p>
+</header>
+{% if report_error %}<div class="w3-panel w3-pale-red w3-border w3-border-red" role="alert">{{ report_error }}</div>{% endif %}
+<form method="get" class="w3-card w3-white w3-padding w3-margin-bottom" aria-label="Data reconciliation report filters">
+  <input type="hidden" name="export" value="xlsx">
+  {% if form.non_field_errors %}<div class="w3-panel w3-pale-red" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+  <section aria-labelledby="reconciliation-scope">
+    <h3 id="reconciliation-scope" class="w3-large">Scope</h3>
+    <div class="w3-row-padding">
+      {% for field in form %}{% if field.name != "contents" and field.name != "statuses" and field.name != "recovery_statuses" %}
+      <div class="w3-col s12 m6 l3 w3-margin-bottom">
+        <label class="w3-text-grey w3-small" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}
+        {% for error in field.errors %}<span class="w3-text-red w3-small">{{ error }}</span>{% endfor %}
+      </div>
+      {% endif %}{% endfor %}
+    </div>
+  </section>
+  <div class="w3-row-padding">
+    <section class="w3-col s12 l6" aria-labelledby="reconciliation-contents">
+      <h3 id="reconciliation-contents" class="w3-large">Workbook contents</h3>
+      <div class="w3-row">{% for choice in form.contents %}<label class="w3-col s12 m6 w3-padding-small">{{ choice.tag }} {{ choice.choice_label }}</label>{% endfor %}</div>
+      {% for error in form.contents.errors %}<span class="w3-text-red w3-small">{{ error }}</span>{% endfor %}
+    </section>
+    <section class="w3-col s12 l6" aria-labelledby="reconciliation-statuses">
+      <h3 id="reconciliation-statuses" class="w3-large">Included statuses</h3>
+      <div class="w3-row">{% for choice in form.statuses %}<label class="w3-col s12 m6 w3-padding-small">{{ choice.tag }} {{ choice.choice_label }}</label>{% endfor %}</div>
+      {% for error in form.statuses.errors %}<span class="w3-text-red w3-small">{{ error }}</span>{% endfor %}
+      <h3 class="w3-large">Recovery statuses</h3>
+      <div class="w3-row">{% for choice in form.recovery_statuses %}<label class="w3-col s12 m6 w3-padding-small">{{ choice.tag }} {{ choice.choice_label }}</label>{% endfor %}</div>
+      {% for error in form.recovery_statuses.errors %}<span class="w3-text-red w3-small">{{ error }}</span>{% endfor %}
+    </section>
+  </div>
+  <div class="w3-margin-top">
+    <button class="w3-button w3-green" type="submit"><span class="fa-solid fa-file-excel" aria-hidden="true"></span> Download Excel</button>
+    <a class="w3-button w3-white w3-border" href="{% url 'bones:reports:data_reconciliation' %}"><span class="fa-solid fa-eraser" aria-hidden="true"></span> Clear</a>
+  </div>
+</form>
+<aside class="w3-panel w3-pale-blue w3-border" aria-label="Reconciliation methodology">
+  <p><strong>Defaults show exceptions only.</strong> Current exact records, cancelled field work, and healthy GPS tracks can be included when a complete audit workbook is needed.</p>
+  <p>The Summary sheet is always included. No records are repaired, restored, changed, or deleted.</p>
+</aside>
+{% endblock %}

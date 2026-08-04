@@ -150,3 +150,6 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
+# Generated reconciliation and other local report workbooks
+app/outputs/

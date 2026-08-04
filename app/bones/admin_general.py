@@ -1,5 +1,6 @@
 from __future__ import annotations
 import hashlib, json
+from pathlib import Path
 from urllib.parse import urlencode
 from django import forms
 from django.contrib import admin, messages
@@ -7,11 +8,14 @@ from django.contrib.admin.models import CHANGE, LogEntry
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
+from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import path, reverse
+from django.utils import timezone
 from django.utils.html import format_html
 from simple_history.admin import SimpleHistoryAdmin
-from .models import (CompletedOccurrence,CompletedOccurrenceInfo,CompletedResponse,CompletedTransect,CompletedTransectInfo,CompletedTransectTrack,CompletedWorkflow,DataLogFile,DataType,DataTypeOption,MNIElementRule,MNITaxonRule,MNIWeatheringRule,ProjectConfig,Question,TemplateTransect,TemplateWorkflow,TransectDataLog)
+from .models import (CompletedOccurrence,CompletedOccurrenceInfo,CompletedResponse,CompletedTransect,CompletedTransectInfo,CompletedTransectTrack,CompletedWorkflow,DataLogFile,DataType,DataTypeOption,MNIElementRule,MNITaxonRule,MNIWeatheringRule,OccurrenceInfoImportBatch,ProjectConfig,Question,TemplateTransect,TemplateWorkflow,TransectDataLog)
+from .occurrence_info_imports import template_workbook, validate_workbook
 
 def signature(obj):
     if not obj or obj.pk is None: return ""
@@ -35,6 +39,18 @@ class OccurrenceInfoAuditForm(AuditFieldsForm):
         required=False,
         help_text="Selecting one option stores its code and text together.",
     )
+class OccurrenceInfoImportForm(forms.Form):
+    workbook=forms.FileField(
+        help_text="Upload the completed .xlsx template (maximum 5 MB).",
+        widget=forms.ClearableFileInput(attrs={"accept":".xlsx"}),
+    )
+    def clean_workbook(self):
+        workbook=self.cleaned_data["workbook"]
+        if Path(workbook.name).suffix.lower() != ".xlsx":
+            raise ValidationError("Upload an .xlsx workbook.")
+        if workbook.size > 5 * 1024 * 1024:
+            raise ValidationError("The workbook may not exceed 5 MB.")
+        return workbook
 class WorkflowDeletionForm(forms.Form):
     reason=forms.CharField(max_length=100,widget=forms.Textarea(attrs={"rows":3}),help_text="Required. Stored in workflow and response deletion history.")
     confirm=forms.BooleanField(label="I confirm that this workflow and its responses should be deleted")
@@ -256,12 +272,90 @@ class TrackAdmin(ReadOnlyAdmin): list_display=("id","transect","time","user","is
 @admin.register(CompletedOccurrenceInfo)
 class OccurrenceInfoAdmin(BonesHistoryAdmin):
     form=OccurrenceInfoAuditForm
+    change_list_template="admin/bones/completedoccurrenceinfo/change_list.html"
     list_display=("occurrence","pre_or_post","question_text","response_code","response","history_link")
     list_select_related=("occurrence__transect",)
     search_fields=("=occurrence__id","=occurrence__transect__uid","question_text__icontains","response_code__icontains","response__icontains")
     list_filter=("pre_or_post",)
     readonly_fields=("id","occurrence","pre_or_post","question_text","response_data_type","options")
     fields=("id","occurrence","pre_or_post","question_text","response_data_type","options","answer_option","response_code","response","edit_reason","record_version")
+    def get_urls(self):
+        custom=[
+            path("bulk-update/template/",self.admin_site.admin_view(self.import_template),name="bones_completedoccurrenceinfo_import_template"),
+            path("bulk-update/",self.admin_site.admin_view(self.bulk_update),name="bones_completedoccurrenceinfo_bulk_update"),
+            path("bulk-update/<uuid:batch_id>/",self.admin_site.admin_view(self.bulk_preview),name="bones_completedoccurrenceinfo_bulk_preview"),
+        ]
+        return custom+super().get_urls()
+    def _import_allowed(self,request):
+        return request.user.has_perm("bones.run_occurrence_info_import") and request.user.has_perm("bones.change_completedoccurrenceinfo")
+    def changelist_view(self,request,extra_context=None):
+        extra_context={**(extra_context or {}),"occurrence_info_import_allowed":self._import_allowed(request)}
+        return super().changelist_view(request,extra_context)
+    def import_template(self,request):
+        if not self._import_allowed(request): return HttpResponseForbidden()
+        response=HttpResponse(
+            template_workbook(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"]='attachment; filename="occurrence_info_updates.xlsx"'
+        return response
+    def bulk_update(self,request):
+        if not self._import_allowed(request): return HttpResponseForbidden()
+        form=OccurrenceInfoImportForm(request.POST or None,request.FILES or None)
+        if request.method=="POST" and form.is_valid():
+            upload=form.cleaned_data["workbook"]
+            content=upload.read()
+            try:
+                items=validate_workbook(content)
+            except ValueError as exc:
+                form.add_error("workbook",str(exc))
+            else:
+                batch=OccurrenceInfoImportBatch.objects.create(
+                    original_filename=Path(upload.name).name,
+                    file_checksum=hashlib.sha256(content).hexdigest(),
+                    created_by=request.user,
+                    summary={"items":items},
+                )
+                return redirect("admin:bones_completedoccurrenceinfo_bulk_preview",batch_id=batch.pk)
+        return render(request,"admin/bones/completedoccurrenceinfo/bulk_update.html",{
+            **self.admin_site.each_context(request),"form":form,"title":"Bulk update occurrence answers",
+            "template_url":reverse("admin:bones_completedoccurrenceinfo_import_template"),
+        })
+    def bulk_preview(self,request,batch_id):
+        if not self._import_allowed(request): return HttpResponseForbidden()
+        batch=get_object_or_404(OccurrenceInfoImportBatch,pk=batch_id)
+        items=batch.summary.get("items",[])
+        counts={status:sum(item.get("status")==status for item in items) for status in ("ready","unchanged","duplicate","error")}
+        can_apply=batch.status=="preview" and counts["ready"]>0 and counts["error"]==0
+        if request.method=="POST":
+            if not can_apply:
+                messages.error(request,"This import cannot be applied because it has errors, no changes, or was already completed.")
+            else:
+                updated=unchanged=0
+                with transaction.atomic():
+                    for item in items:
+                        if item["status"] != "ready": continue
+                        target=CompletedOccurrenceInfo.objects.select_for_update().get(pk=item["target_id"])
+                        new_code=item["new_response_code"]
+                        new_response=item["canonical_new_response"]
+                        if (target.response_code or "")==new_code and (target.response or "").strip().casefold()==new_response.strip().casefold():
+                            unchanged+=1; continue
+                        target.response_code=new_code
+                        target.response=new_response
+                        target._history_user=request.user
+                        target._change_reason=item["update_comment"]
+                        target.save(update_fields=["response_code","response"])
+                        updated+=1
+                    batch.status="completed"
+                    batch.completed_at=timezone.now()
+                    batch.summary={**batch.summary,"updated":updated,"unchanged_at_apply":unchanged}
+                    batch.save(update_fields=["status","completed_at","summary"])
+                messages.success(request,f"Updated {updated} occurrence answers; skipped {counts['unchanged']+counts['duplicate']+unchanged} unchanged or duplicate rows.")
+                return redirect("admin:bones_completedoccurrenceinfo_changelist")
+        return render(request,"admin/bones/completedoccurrenceinfo/bulk_preview.html",{
+            **self.admin_site.each_context(request),"batch":batch,"items":items,"counts":counts,
+            "can_apply":can_apply,"title":"Review occurrence answer updates",
+        })
     @admin.display(description="Configured answer options")
     def options(self,o):
         if not o or not o.response_data_type:return ""
@@ -295,6 +389,13 @@ class OccurrenceInfoAdmin(BonesHistoryAdmin):
                         else: cleaned["response_code"]=option.code; cleaned["response"]=option.text or ""
                 return cleaned
         return OptionAnswerForm
+@admin.register(OccurrenceInfoImportBatch)
+class OccurrenceInfoImportBatchAdmin(admin.ModelAdmin):
+    list_display=("id","original_filename","status","created_by","created_at","completed_at")
+    readonly_fields=("id","original_filename","file_checksum","status","summary","created_by","created_at","completed_at")
+    def has_add_permission(self,request): return False
+    def has_change_permission(self,request,obj=None): return False
+    def has_delete_permission(self,request,obj=None): return False
 @admin.register(TransectDataLog)
 class TransectLogAdmin(ReadOnlyAdmin): list_display=("id","transect","data_log_file","is_primary","username"); search_fields=("=id","=transect__uid","=data_log_file__id","username__icontains")
 

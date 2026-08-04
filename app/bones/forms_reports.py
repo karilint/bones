@@ -4,7 +4,59 @@ from django.db import DatabaseError
 from django.core.exceptions import ImproperlyConfigured
 from django.db.models import Q
 
-from .models import CompletedTransect, MNITaxonRule
+from .models import CompletedTransect, DataLogFile, MNITaxonRule
+
+
+RECONCILIATION_SHEETS = (
+    ("Critical findings", "Critical findings"), ("Transects", "Transects"),
+    ("Occurrences", "Occurrences"), ("Instances", "Instances"), ("GPS", "GPS issues"),
+    ("Recovery candidates", "Recovery candidates"),
+    ("Database only", "Database-only records"), ("Deleted evidence", "Deleted and historical evidence"),
+    ("Log parse issues", "Log parsing issues"), ("Methodology", "Methodology"),
+)
+RECONCILIATION_STATUSES = (
+    ("MISSING", "Missing"), ("AMBIGUOUS", "Ambiguous"),
+    ("DELETED_CONFIRMED", "Deleted confirmed"), ("HISTORICAL_ONLY", "Historical only"),
+    ("CURRENT_PROBABLE", "Probable match"), ("GPS_MISSING", "GPS missing"),
+    ("GPS_PARTIAL", "GPS partial"), ("GPS_OUTSIDE_TIME_RANGE", "GPS outside time range"),
+    ("GPS_INVALID_COORDINATES", "GPS invalid coordinates"), ("GPS_HISTORY_ONLY", "GPS history only"),
+    ("GPS_EXPECTATION_UNKNOWN", "GPS expectation unknown"),
+    ("GPS_NOT_EXPECTED_EARLY_MANUAL", "Early manual GPS not expected"),
+    ("CURRENT_EXACT", "Current exact"), ("LOG_CANCELLED", "Log cancelled"),
+    ("GPS_PRESENT", "GPS present"),
+)
+RECOVERY_STATUSES = (
+    ("READY_FOR_IMPORT", "Ready for import"),
+    ("READY_AFTER_PARENT", "Ready after parent"),
+    ("REVIEW_REQUIRED", "Review required"),
+    ("INSUFFICIENT_LOG_DATA", "Insufficient log data"),
+    ("TEMPLATE_NOT_FOUND", "Template not found"),
+    ("INTENTIONALLY_DELETED", "Intentionally deleted"),
+)
+
+
+class DataReconciliationReportForm(forms.Form):
+    from_year = forms.IntegerField(required=False, min_value=1900, max_value=2200, widget=forms.NumberInput(attrs={"class": "w3-input"}))
+    to_year = forms.IntegerField(required=False, min_value=1900, max_value=2200, widget=forms.NumberInput(attrs={"class": "w3-input"}))
+    logs = forms.ModelMultipleChoiceField(required=False, queryset=DataLogFile.objects.none(), widget=forms.SelectMultiple(attrs={"class": "w3-select", "aria-label": "Data logs; leave empty for all"}))
+    gps_required_from_year = forms.IntegerField(required=False, min_value=1900, max_value=2200, label="GPS expected from year", widget=forms.NumberInput(attrs={"class": "w3-input"}))
+    contents = forms.MultipleChoiceField(choices=RECONCILIATION_SHEETS, widget=forms.CheckboxSelectMultiple(attrs={"class": "w3-check"}), initial=[value for value, _ in RECONCILIATION_SHEETS])
+    statuses = forms.MultipleChoiceField(choices=RECONCILIATION_STATUSES, widget=forms.CheckboxSelectMultiple(attrs={"class": "w3-check"}), initial=[value for value, _ in RECONCILIATION_STATUSES if value not in {"CURRENT_EXACT", "LOG_CANCELLED", "GPS_PRESENT"}])
+    recovery_statuses = forms.MultipleChoiceField(choices=RECOVERY_STATUSES, widget=forms.CheckboxSelectMultiple(attrs={"class": "w3-check"}), initial=["READY_FOR_IMPORT", "READY_AFTER_PARENT", "REVIEW_REQUIRED", "INSUFFICIENT_LOG_DATA", "TEMPLATE_NOT_FOUND"])
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        try:
+            self.fields["logs"].queryset = DataLogFile.objects.order_by("upload_date", "id")
+        except (DatabaseError, ImproperlyConfigured):
+            pass
+
+    def clean(self):
+        cleaned = super().clean()
+        start, end = cleaned.get("from_year"), cleaned.get("to_year")
+        if start and end and start > end:
+            self.add_error("to_year", "To year must be the same as or later than from year.")
+        return cleaned
 
 
 class MNIReportForm(forms.Form):

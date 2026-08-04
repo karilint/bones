@@ -16,7 +16,7 @@ def write_image_index():
     with temporary.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.writer(handle)
         writer.writerow([
-            "template_name", "transect_uid", "transect_date", "occurrence_number",
+            "transect_name", "template_name", "transect_uid", "transect_date", "occurrence_number",
             "occurrence_id", "instance_number", "entity_type", "entity_id",
             "photo_role", "original_filename", "storage_path", "checksum",
             "import_batch", "uploaded_at",
@@ -31,7 +31,7 @@ def write_image_index():
                 if target_type == "instance" and ":" in target_id:
                     instance_number = target_id.rsplit(":", 1)[1]
                 writer.writerow([
-                    metadata.get("template_name", ""), metadata.get("transect_uid", ""),
+                    metadata.get("transect_name", ""), metadata.get("template_name", ""), metadata.get("transect_uid", ""),
                     metadata.get("transect_date", ""), metadata.get("occurrence_number", ""),
                     metadata.get("occurrence_id", ""), instance_number,
                     target_type, target_id, image.photo_role, image.original_name,

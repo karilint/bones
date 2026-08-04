@@ -53,6 +53,7 @@ class DataLogFile(models.Model):
         db_table = "DataLogFiles"
         verbose_name = "Data log file"
         verbose_name_plural = "Data log files"
+        permissions = (("run_data_reconciliation_report", "Can run data reconciliation reports"),)
 
     def __str__(self) -> str:
         return f"Data log {self.id}"

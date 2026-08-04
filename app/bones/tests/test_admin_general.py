@@ -1,12 +1,15 @@
+from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from pathlib import Path
 from django.contrib import admin
 from django.test import RequestFactory, SimpleTestCase
 from django.urls import reverse
+from openpyxl import Workbook, load_workbook
 from ..admin_general import (BonesHistoryAdmin, OccurrenceInfoAdmin, ResponseAdmin,
                              WorkflowAdmin, WorkflowDeletionForm)
 from ..models import CompletedOccurrence, CompletedOccurrenceInfo, CompletedResponse, CompletedTransect, CompletedWorkflow
+from ..occurrence_info_imports import COLUMN_GUIDE, HEADERS, template_workbook, validate_workbook
 
 class GeneralAdminTests(SimpleTestCase):
     def setUp(self):
@@ -75,6 +78,60 @@ class GeneralAdminTests(SimpleTestCase):
             self.assertIn(field,model_admin.readonly_fields)
         for field in ("answer_option","response_code","response","edit_reason","record_version"):
             self.assertIn(field,model_admin.fields)
+
+    def test_occurrence_info_admin_has_bulk_update_routes(self):
+        self.assertEqual(
+            reverse("admin:bones_completedoccurrenceinfo_bulk_update"),
+            "/admin/bones/completedoccurrenceinfo/bulk-update/",
+        )
+        self.assertEqual(
+            reverse("admin:bones_completedoccurrenceinfo_import_template"),
+            "/admin/bones/completedoccurrenceinfo/bulk-update/template/",
+        )
+
+    def test_occurrence_info_import_template_has_contract_and_instructions(self):
+        workbook=load_workbook(BytesIO(template_workbook()))
+        self.assertEqual(tuple(cell.value for cell in workbook["Updates"][1]),HEADERS)
+        self.assertIn("Instructions",workbook.sheetnames)
+        self.assertEqual(workbook["Updates"]["C2"].value,"Post")
+        self.assertIn("not the template name",workbook["Updates"]["A1"].comment.text)
+        self.assertIn("not the occurrence database key",workbook["Updates"]["B1"].comment.text)
+        self.assertIn("not a question ID",workbook["Updates"]["D1"].comment.text)
+        instructions=workbook["Instructions"]
+        self.assertIn("human-readable values",instructions["A2"].value)
+        self.assertEqual(tuple(cell.value for cell in instructions[8]),("Column","Required","Human-readable value expected","Example","Validation"))
+        self.assertEqual(tuple(instructions.cell(row=9,column=index).value for index in range(1,6)),COLUMN_GUIDE[0])
+
+    def test_occurrence_info_import_rejects_long_comment_before_database_lookup(self):
+        workbook=Workbook(); sheet=workbook.active; sheet.title="Updates"
+        sheet.append(HEADERS); sheet.append(("1",5,"Post","Taxon Guess?","waterbuck","x"*101))
+        content=BytesIO(); workbook.save(content)
+        result=validate_workbook(content.getvalue())
+        self.assertEqual(result[0]["status"],"error")
+        self.assertIn("100",result[0]["message"])
+
+    def test_occurrence_info_import_rejects_wrong_headers(self):
+        workbook=Workbook(); workbook.active.title="Updates"; workbook.active.append(("wrong",))
+        content=BytesIO(); workbook.save(content)
+        with self.assertRaisesMessage(ValueError,"headings"):
+            validate_workbook(content.getvalue())
+
+    @patch("bones.occurrence_info_imports.CompletedOccurrenceInfo.objects.select_related")
+    def test_occurrence_info_import_matches_completed_transect_name(self,select_related):
+        target=SimpleNamespace(
+            pk=12,response_data_type=None,response_code="41",response="impala",occurrence_id=7,
+            occurrence=SimpleNamespace(transect_id=99,transect=SimpleNamespace(name="133")),
+        )
+        queryset=MagicMock(); filtered=MagicMock(); filtered.__getitem__.return_value=[target]
+        queryset.filter.return_value=filtered; select_related.return_value=queryset
+        workbook=Workbook(); sheet=workbook.active; sheet.title="Updates"
+        sheet.append(HEADERS); sheet.append(("133",2,"Post","Taxon Guess?","waterbuck","Corrected taxon"))
+        content=BytesIO(); workbook.save(content)
+        result=validate_workbook(content.getvalue())
+        self.assertEqual(result[0]["status"],"ready")
+        kwargs=queryset.filter.call_args.kwargs
+        self.assertEqual(kwargs["occurrence__transect__name__iexact"],"133")
+        self.assertNotIn("occurrence__transect__transect_template__name__iexact",kwargs)
 
     def test_occurrence_note_without_options_uses_free_text_fields(self):
         model_admin=admin.site._registry[CompletedOccurrenceInfo]

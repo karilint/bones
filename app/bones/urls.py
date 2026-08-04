@@ -26,6 +26,7 @@ from .views import (
     DashboardView,
     DataLogFileDetailView,
     DataLogFileListView,
+    DataReconciliationReportView,
     DataTypeDetailView,
     DataTypeListView,
     DataTypeOptionListView,
@@ -169,6 +170,7 @@ history_patterns = (
 report_patterns = ([
     path("mni/", MNISummaryView.as_view(), name="mni"),
     path("mni-analysis/", MNIAnalysisExportView.as_view(), name="mni_analysis"),
+    path("data-reconciliation/", DataReconciliationReportView.as_view(), name="data_reconciliation"),
 ], "reports")
 
 urlpatterns = [

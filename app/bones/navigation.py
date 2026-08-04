@@ -158,6 +158,7 @@ NAVIGATION_SECTIONS: List[NavigationLink] = [
         "children": [
             {"label": "MNI Summary", "url_name": "bones:reports:mni"},
             {"label": "Bone Census Data", "url_name": "bones:reports:mni_analysis"},
+            {"label": "Data Reconciliation", "url_name": "bones:reports:data_reconciliation"},
         ],
     },
     {

@@ -1,5 +1,8 @@
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 from django.core.files.storage import FileSystemStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -11,7 +14,7 @@ from PIL import Image
 
 from ..admin import BulkForm
 from ..image_forms import EntityImageUploadForm
-from ..image_imports import norm, parse_filename
+from ..image_imports import norm, parse_filename, resolve_filename
 from ..image_views import ImageDeleteView
 from ..models import (
     CompletedOccurrenceInfo, CompletedResponse, CompletedTransectInfo,
@@ -71,8 +74,8 @@ class EntityImageTests(SimpleTestCase):
         self.assertIs(match.func.view_class, ImageDeleteView)
 
     def test_bulk_filename_schemas(self):
-        self.assertEqual(parse_filename("10_4365881_1_2.jpg"), ("full_hierarchy", {"template_name": "10", "transect_uid": 4365881, "occurrence_number": 1, "instance_number": 2}))
-        self.assertEqual(parse_filename("12.100.18.jpg"), ("historical_occurrence", {"occurrence_number": 12, "template_name": "100", "year": 2018}))
+        self.assertEqual(parse_filename("10_4365881_1_2.jpg"), ("full_hierarchy", {"transect_name": "10", "transect_uid": 4365881, "occurrence_number": 1, "instance_number": 2}))
+        self.assertEqual(parse_filename("12.100.18.jpg"), ("historical_occurrence", {"occurrence_number": 12, "transect_name": "100", "year": 2018}))
         schema, metadata = parse_filename("106_4479276_Turn_left.png")
         self.assertEqual(schema, "transect_location")
         self.assertEqual(metadata["photo_role"], "turn")
@@ -80,7 +83,7 @@ class EntityImageTests(SimpleTestCase):
     def test_instance_range_filename_expands_inclusively(self):
         schema, metadata = parse_filename("105_4478950_18_1-4.JPG")
         self.assertEqual(schema, "instance_range")
-        self.assertEqual(metadata["template_name"], "105")
+        self.assertEqual(metadata["transect_name"], "105")
         self.assertEqual(metadata["transect_uid"], 4478950)
         self.assertEqual(metadata["occurrence_number"], 18)
         self.assertEqual(metadata["instance_numbers"], [1, 2, 3, 4])
@@ -117,25 +120,42 @@ class EntityImageTests(SimpleTestCase):
                 schema, _ = parse_filename(filename)
                 self.assertEqual(schema, "invalid_instance_range")
 
-    def test_text_template_name_can_precede_instance_range(self):
+    def test_text_transect_name_can_precede_instance_range(self):
         schema, metadata = parse_filename("North_Woodland_4478950_18_1-4.JPG")
         self.assertEqual(schema, "instance_range")
-        self.assertEqual(metadata["template_name"], "North_Woodland")
-    def test_text_template_names_can_contain_separators(self):
+        self.assertEqual(metadata["transect_name"], "North_Woodland")
+    def test_text_transect_names_can_contain_separators(self):
         schema, metadata = parse_filename("North_Woodland_4365881_1_2.jpg")
         self.assertEqual(schema, "full_hierarchy")
-        self.assertEqual(metadata["template_name"], "North_Woodland")
+        self.assertEqual(metadata["transect_name"], "North_Woodland")
         schema, metadata = parse_filename("12.North.Woodland.18.jpg")
         self.assertEqual(schema, "historical_occurrence")
-        self.assertEqual(metadata["template_name"], "North.Woodland")
+        self.assertEqual(metadata["transect_name"], "North.Woodland")
 
     def test_safe_template_folder_is_readable_stable_and_windows_safe(self):
         folder = safe_template_folder('Transect: North/West')
         self.assertTrue(folder.startswith("Transect- North-West--"))
         self.assertEqual(folder, safe_template_folder('Transect: North/West'))
         self.assertNotIn("/", folder)
-    def test_template_names_ignore_leading_zeroes(self):
+    def test_transect_names_ignore_leading_zeroes(self):
         self.assertEqual(norm("010"), norm("10"))
+
+    @patch("bones.image_imports.CompletedTransect.objects.select_related")
+    def test_uid_filename_checks_completed_name_and_retains_template_metadata(self,select_related):
+        transect=SimpleNamespace(
+            pk=7130086,name="134",start_time=datetime(2024,8,22,tzinfo=timezone.utc),
+            transect_template=SimpleNamespace(name="133"),
+        )
+        queryset=MagicMock(); queryset.get.return_value=transect; select_related.return_value=queryset
+        result=resolve_filename("134_7130086_Start.jpg")
+        self.assertEqual(result["status"],"ready")
+        self.assertEqual(result["metadata"]["transect_name"],"134")
+        self.assertEqual(result["metadata"]["template_name"],"133")
+
+        mismatch=resolve_filename("133_7130086_Start.jpg")
+        self.assertEqual(mismatch["status"],"transect_name_mismatch")
+        self.assertEqual(mismatch["actual_transect_name"],"134")
+        self.assertEqual(mismatch["actual_template_name"],"133")
     def test_generated_alt_text_uses_parent_identifiers(self):
         image = EntityImage(entity_type="instance", entity_id="42:3")
         self.assertEqual(image.generated_alt_text(), "Image for occurrence 42, instance 3")

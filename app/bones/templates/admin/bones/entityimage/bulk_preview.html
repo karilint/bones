@@ -1,1 +1,12 @@
-{% extends "admin/base_site.html" %}{% block content %}<form method="post">{% csrf_token %}<table><thead><tr><th>File</th><th>Schema</th><th>Result</th><th>Resolution</th></tr></thead><tbody>{% for item in items %}<tr><td>{{ item.filename }}</td><td>{{ item.schema }}</td><td>{{ item.status }}</td><td>{% if item.status == "ambiguous" %}<select name="candidate_{{ forloop.counter0 }}"><option value="">Select occurrence</option>{% for candidate in item.candidates %}<option value="{{ candidate.id }}">{{ candidate.label }}</option>{% endfor %}</select>{% elif item.status == "ready" %}{{ item.entity_type }} {{ item.entity_id }}{% if item.targets %} — {{ item.targets|length }} instance links{% endif %}{% elif item.status == "missing_instances" %}Missing instances: {{ item.missing_instances|join:", " }}{% else %}Not importable{% endif %}</td></tr>{% endfor %}</tbody></table><p><input type="submit" value="Confirm import" class="default"></p></form>{% endblock %}
+{% extends "admin/base_site.html" %}
+{% block content %}
+<main><form method="post">{% csrf_token %}
+<table><thead><tr><th>File</th><th>Schema</th><th>Result</th><th>Resolution</th></tr></thead><tbody>
+{% for item in items %}<tr><td>{{ item.filename }}</td><td>{{ item.schema }}</td><td>{{ item.status }}</td><td>
+{% if item.status == "ambiguous" %}<select name="candidate_{{ forloop.counter0 }}"><option value="">Select occurrence</option>{% for candidate in item.candidates %}<option value="{{ candidate.id }}">{{ candidate.label }}</option>{% endfor %}</select>
+{% elif item.status == "ready" %}{{ item.entity_type }} {{ item.entity_id }}{% if item.targets %} — {{ item.targets|length }} instance links{% endif %}
+{% elif item.status == "missing_instances" %}Missing instances: {{ item.missing_instances|join:", " }}
+{% elif item.status == "transect_name_mismatch" %}Filename transect name “{{ item.metadata.transect_name }}” does not match completed transect “{{ item.actual_transect_name }}” for UID {{ item.transect_uid }}. Its template is “{{ item.actual_template_name }}”.
+{% else %}Not importable{% endif %}</td></tr>{% endfor %}
+</tbody></table><p><input type="submit" value="Confirm import" class="default"></p></form></main>
+{% endblock %}

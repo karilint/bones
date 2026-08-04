@@ -1,0 +1,12 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<main>
+  <p><a href="{{ template_url }}">Download the Excel template</a>, remove its example row, and enter one answer update per row.</p>
+  <p>All six columns are required. Update comments may contain at most 100 characters. Uploading only creates a preview.</p>
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <input type="submit" value="Validate and preview" class="default">
+  </form>
+</main>
+{% endblock %}
