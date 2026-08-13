@@ -14,6 +14,12 @@ def norm(value):
 
 def parse_filename(filename):
     stem = Path(filename).stem
+    photo_variant = None
+    variant_match = re.fullmatch(
+        r"(.+_\d+_\d+_(?:\d+|\d+-\d+))_([A-Za-z]+)", stem
+    )
+    if variant_match:
+        stem, photo_variant = variant_match.groups()
 
     parts = stem.rsplit("_", 3)
     if (
@@ -31,22 +37,28 @@ def parse_filename(filename):
                 "occurrence_number": int(occurrence),
                 "instance_range": instance_range,
             }
-        return "instance_range", {
+        metadata = {
             "transect_name": transect_name,
             "transect_uid": int(uid),
             "occurrence_number": int(occurrence),
             "instance_range": instance_range,
             "instance_numbers": list(range(first, last + 1)),
         }
+        if photo_variant:
+            metadata["photo_variant"] = photo_variant
+        return "instance_range", metadata
 
     if len(parts) == 4 and parts[0] and all(part.isdigit() for part in parts[1:]):
         transect_name, uid, occurrence, instance = parts
-        return "full_hierarchy", {
+        metadata = {
             "transect_name": transect_name,
             "transect_uid": int(uid),
             "occurrence_number": int(occurrence),
             "instance_number": int(instance),
         }
+        if photo_variant:
+            metadata["photo_variant"] = photo_variant
+        return "full_hierarchy", metadata
 
     parts = stem.split(".")
     if len(parts) >= 3 and parts[0].isdigit() and parts[-1].isdigit() and len(parts[-1]) == 2:
@@ -56,13 +68,15 @@ def parse_filename(filename):
             "year": 2000 + int(parts[-1]),
         }
 
-    match = re.fullmatch(r"(.+)_(\d+)_(Start.*|Turn.*)", stem, re.IGNORECASE)
+    match = re.fullmatch(
+        r"(.+)_(\d+)_(\d*(?:Start|Begin|Turn).*)", stem, re.IGNORECASE
+    )
     if match:
         transect_name, uid, label = match.groups()
         return "transect_location", {
             "transect_name": transect_name,
             "transect_uid": int(uid),
-            "photo_role": "start" if label.casefold().startswith("start") else "turn",
+            "photo_role": "turn" if "turn" in label.casefold() else "start",
             "source_label": label,
         }
     return "unknown", {}

@@ -262,7 +262,11 @@ class ProjectConfigAdmin(BonesHistoryAdmin):
     list_display=("id","project","publish_date","config_folder","history_link"); search_fields=("=id","project__icontains","config_folder__icontains"); readonly_fields=("id",)
 
 @admin.register(DataLogFile)
-class DataLogAdmin(ReadOnlyAdmin): list_display=("id","upload_date","uploaded_by"); search_fields=("=id","uploaded_by__icontains","contents__icontains")
+class DataLogAdmin(ReadOnlyAdmin):
+    list_display=("id","upload_date","uploaded_by")
+    search_fields=("=id","uploaded_by__icontains","contents__icontains")
+    def get_queryset(self,request):
+        return super().get_queryset(request).defer("contents")
 @admin.register(DataTypeOption)
 class OptionAdmin(ReadOnlyAdmin): list_display=("data_type","code","text"); list_select_related=("data_type",); search_fields=("data_type__name__icontains","code__icontains","text__icontains")
 @admin.register(CompletedTransectInfo)

@@ -12,7 +12,7 @@ from ..forms_reports import BoneCensusExportForm
 from ..reports.mni import (ElementRule, GroupMNI, Observation, OccurrenceRecord,
                            ReportResult, calculate_mni, element_mni)
 from ..reports.mni_service import (_weathering_for_occurrence, normalize_side,
-                                   weather_group, weather_score)
+                                   rows_in_batches, weather_group, weather_score)
 from ..views.reports import (analysis_export_filename, analysis_filter_rows,
                              export_analysis_workbook, export_workbook)
 from ..mni_seed import (DEFAULT_EXCLUDED_TAXA, ELEMENT_RULES, TAXON_RULES,
@@ -317,6 +317,33 @@ class MNIReportCalculationTests(SimpleTestCase):
 
 
 class NormalizationTests(SimpleTestCase):
+    def test_database_ids_are_queried_in_sql_server_safe_batches(self):
+        from unittest.mock import MagicMock
+
+        queryset = MagicMock()
+        queryset.filter.side_effect = lambda **lookup: list(lookup.values())[0]
+
+        rows = rows_in_batches(queryset, "workflow_id", range(2001), batch_size=1000)
+
+        self.assertEqual(rows, list(range(2001)))
+        self.assertEqual(queryset.filter.call_count, 3)
+        self.assertEqual(
+            len(queryset.filter.call_args_list[0].kwargs["workflow_id__in"]),
+            1000,
+        )
+        self.assertEqual(
+            len(queryset.filter.call_args_list[-1].kwargs["workflow_id__in"]),
+            1,
+        )
+
+    def test_database_batching_skips_queries_for_empty_ids(self):
+        from unittest.mock import MagicMock
+
+        queryset = MagicMock()
+
+        self.assertEqual(rows_in_batches(queryset, "workflow_id", []), [])
+        queryset.filter.assert_not_called()
+
     def test_selected_transect_objects_are_reduced_to_primary_keys(self):
         from unittest.mock import MagicMock, patch
 

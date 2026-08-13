@@ -1,7 +1,34 @@
-from django.test import RequestFactory, SimpleTestCase
+from types import SimpleNamespace
+from unittest.mock import patch
 
-from ..models import DataType, Question
-from ..views.detail import QuestionDetailView
+from django.test import RequestFactory, SimpleTestCase
+from django.urls import reverse
+
+from ..models import DataLogFile, DataType, Question
+from ..views.detail import (
+    DataLogFileDetailView, DataLogFilePayloadView, QuestionDetailView,
+)
+
+
+class DataLogFileDetailViewTests(SimpleTestCase):
+    def test_queryset_defers_large_payload(self):
+        deferred, is_deferred = DataLogFileDetailView().get_queryset().query.deferred_loading
+        self.assertTrue(is_deferred)
+        self.assertIn("contents", deferred)
+
+    def test_detail_exposes_separate_payload_download(self):
+        view = DataLogFileDetailView()
+        view.object = DataLogFile(id=7)
+        action = view.get_extra_actions()[0]
+        self.assertEqual(action["url"], reverse("bones:logs:payload", kwargs={"pk": 7}))
+        self.assertEqual(action["icon"], "fa-solid fa-download")
+
+    @patch("bones.views.detail.get_object_or_404")
+    def test_payload_download_is_plain_text_attachment(self, get_object):
+        get_object.return_value = SimpleNamespace(pk=7, contents="payload text")
+        response = DataLogFilePayloadView().get(RequestFactory().get("/"), pk=7)
+        self.assertEqual(response.content, b"payload text")
+        self.assertEqual(response["Content-Disposition"], 'attachment; filename="data-log-7.txt"')
 
 
 class QuestionDetailViewTests(SimpleTestCase):

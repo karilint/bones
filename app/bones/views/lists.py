@@ -658,7 +658,7 @@ class DataLogFileListView(BonesListView):
     history_route_name = "history:data_logs"
 
     def get_queryset(self):
-        self.queryset = DataLogFile.objects.order_by("-upload_date")
+        self.queryset = DataLogFile.objects.defer("contents").order_by("-upload_date")
         return super().get_queryset()
 
     def get_table_headers(self):

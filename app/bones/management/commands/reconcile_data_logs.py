@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Count
@@ -15,6 +15,133 @@ from bones.models import (
 from bones.reports.data_log_reconciliation import (
     gps_status, parse_log, summary_rows, write_workbook,
 )
+
+
+def merged_occurrence_candidate(entry, logged_instances, workflows_by_uid, occurrences_by_id):
+    """Return the one current occurrence containing every logged workflow UID."""
+    workflow_uids = {item.get("workflow_uid") for item in logged_instances if item.get("workflow_uid")}
+    if not workflow_uids or not workflow_uids.issubset(workflows_by_uid):
+        return None
+    occurrence_ids = {workflows_by_uid[uid].occurrence_id for uid in workflow_uids}
+    if len(occurrence_ids) != 1:
+        return None
+    current = occurrences_by_id.get(occurrence_ids.pop())
+    return current
+
+
+def cross_device_occurrence_candidate(
+    entry, logged_occurrences, occurrences_by_parent_number,
+):
+    """Match a device-number alias using unique nearby substantive evidence."""
+    required = ("transect_uid", "number", "start_time", "lat", "long", "user")
+    if any(entry.get(field) is None for field in required):
+        return None
+    matches = {}
+    for peer in logged_occurrences:
+        if (
+            peer is entry
+            or peer.get("log_id") == entry.get("log_id")
+            or str(peer.get("user") or "").casefold()
+            == str(entry.get("user") or "").casefold()
+            or peer.get("transect_uid") != entry["transect_uid"]
+            or peer.get("number") == entry["number"]
+            or peer.get("state") != "completed"
+            or peer.get("evidence_count", 0) <= 0
+            or any(peer.get(field) is None for field in ("start_time", "lat", "long"))
+        ):
+            continue
+        seconds = abs((peer["start_time"] - entry["start_time"]).total_seconds())
+        if (
+            seconds > 120
+            or abs(float(peer["lat"]) - float(entry["lat"])) > 0.0001
+            or abs(float(peer["long"]) - float(entry["long"])) > 0.0001
+        ):
+            continue
+        candidates = occurrences_by_parent_number[
+            (entry["transect_uid"], peer["number"])
+        ]
+        if len(candidates) == 1:
+            matches[candidates[0].id] = candidates[0]
+    return next(iter(matches.values())) if len(matches) == 1 else None
+
+
+def is_empty_logged_occurrence(entry, instance_count):
+    """Identify a line-log occurrence shell containing no answers or workflows."""
+    return entry.get("evidence_count") == 0 and instance_count == 0
+
+
+def logged_parent_transect_cancelled(entry, cancelled_transects):
+    """Check the exact line-log session, falling back for older formats."""
+    parent_transect = entry.get("parent_transect")
+    if parent_transect:
+        return parent_transect.get("state") == "cancelled"
+    return entry.get("transect_uid") in cancelled_transects
+
+
+def omit_logged_occurrence(
+    entry, instance_count, cancelled_transects, deleted=None,
+    parent_deleted=None, merged_current=None, alias_current=None,
+):
+    """Omit non-actionable occurrence shells while retaining valid merges."""
+    cancelled = logged_parent_transect_cancelled(entry, cancelled_transects)
+    return (
+        cancelled or bool(deleted)
+        or (bool(parent_deleted) and not merged_current)
+        or (
+            is_empty_logged_occurrence(entry, instance_count)
+            and not (merged_current or alias_current)
+        )
+    )
+
+
+def omit_logged_instance(
+    entry, cancelled_transects, deleted=None, parent_deleted=None,
+    current_matches=None,
+):
+    """Keep cancelled, deleted, and empty workflow shells out of report work."""
+    empty_shell = (
+        entry.get("state") != "completed"
+        and entry.get("response_count", 0) == 0
+    )
+    cancelled = logged_parent_transect_cancelled(entry, cancelled_transects)
+    return (
+        (cancelled and not current_matches)
+        or bool(deleted) or bool(parent_deleted) or empty_shell
+    )
+
+
+def legacy_track_key(uid, user, time, lat, long, event):
+    """Match SQL legacy minute/coordinate precision without merging devices."""
+    if time:
+        time = (time.replace(tzinfo=None) + timedelta(seconds=30)).replace(
+            second=0, microsecond=0,
+        )
+    return (
+        uid, str(user or "").strip().casefold(), time,
+        round(float(lat), 6) if lat is not None else None,
+        round(float(long), 6) if long is not None else None,
+        event,
+    )
+
+
+def legacy_track_slot_key(uid, user, time, event):
+    """Represent the fields in the legacy table's unique constraint."""
+    key = legacy_track_key(uid, user, time, None, None, event)
+    return key[0], key[1], key[2], key[5]
+
+
+def is_recoverable_track_event(event):
+    """Only events with an exact legacy track flag are recovery records."""
+    return event in {"CHECKPOINT", "TURNAROUND"}
+
+
+def has_valid_track_coordinates(lat, long):
+    """Reject absent, out-of-range, and GPS-failure zero coordinates."""
+    return (
+        lat is not None and long is not None
+        and -90 <= lat <= 90 and -180 <= long <= 180
+        and not (lat == 0 and long == 0)
+    )
 
 
 def collect_reconciliation_rows(options):
@@ -44,7 +171,8 @@ def collect_reconciliation_rows(options):
 
 def filter_reconciliation_rows(rows, included_statuses):
     """Apply presentation status choices without changing summary totals."""
-    selected = set(included_statuses)
+    # Permanent deletions are audit evidence, never outstanding report work.
+    selected = set(included_statuses) - {"DELETED_CONFIRMED"}
     for sheet, status_column in (("Transects", 5), ("Occurrences", 5), ("Instances", 7)):
         rows[sheet] = [row for row in rows[sheet] if row[status_column] in selected]
     rows["GPS"] = [row for row in rows["GPS"] if row[5] in selected]
@@ -92,10 +220,19 @@ class Command(BaseCommand):
         response_counts = Counter({row["workflow_id"]: row["count"] for row in CompletedResponse.objects.values("workflow_id").annotate(count=Count("id"))})
         track_counts = Counter({row["transect_id"]: row["count"] for row in CompletedTransectTrack.objects.values("transect_id").annotate(count=Count("id"))})
         database_track_keys = set()
-        for point in CompletedTransectTrack.objects.values("transect_id", "time", "lat", "long", "is_checkpoint", "is_turn_point"):
+        database_legacy_track_keys = set()
+        database_legacy_track_slots = set()
+        for point in CompletedTransectTrack.objects.values("transect_id", "user", "time", "lat", "long", "is_checkpoint", "is_turn_point"):
             event = "TURNAROUND" if point["is_turn_point"] else "CHECKPOINT" if point["is_checkpoint"] else "OTHER"
             time = point["time"].replace(tzinfo=None) if point["time"] else None
-            database_track_keys.add((point["transect_id"], time, round(float(point["lat"]), 8), round(float(point["long"]), 8), event))
+            user = str(point["user"] or "").strip().casefold()
+            database_track_keys.add((point["transect_id"], user, time, round(float(point["lat"]), 8), round(float(point["long"]), 8), event))
+            database_legacy_track_keys.add(legacy_track_key(
+                point["transect_id"], user, time, point["lat"], point["long"], event,
+            ))
+            database_legacy_track_slots.add(legacy_track_slot_key(
+                point["transect_id"], user, time, event,
+            ))
         links = defaultdict(set)
         for log_id, transect_id in TransectDataLog.objects.values_list("data_log_file_id", "transect_id"):
             links[log_id].add(transect_id)
@@ -155,9 +292,11 @@ class Command(BaseCommand):
 
         for entry in all_logged_occurrences:
             log_occurrence_counts[entry["transect_uid"]] += 1
+        logged_instances_by_occurrence = defaultdict(list)
         for entry in all_logged_instances:
             key = entry["occurrence_id"] or (entry["transect_uid"], entry["occurrence_number"])
             log_instance_counts[key] += 1
+            logged_instances_by_occurrence[key].append(entry)
 
         for entry in [entry for item in parsed for entry in item.transects]:
             year = entry.get("start_time").year if entry.get("start_time") else None
@@ -165,13 +304,13 @@ class Command(BaseCommand):
                 continue
             current = by_transect.get(entry["uid"])
             deleted = transect_deletions.get(entry["uid"])
+            if deleted:
+                continue
             if entry.get("state") == "cancelled":
                 status, confidence, reason = "LOG_CANCELLED", "Exact", "Transect was cancelled in the field log"
             elif current:
                 status, confidence, reason = "CURRENT_EXACT", "Exact", "Matched by transect UID"
                 logged_transect_ids.add(current.uid)
-            elif deleted:
-                status, confidence, reason = "DELETED_CONFIRMED", "Exact", "Matched permanent transect deletion evidence"
             elif entry["uid"] in historical_transects:
                 status, confidence, reason = "HISTORICAL_ONLY", "Exact", "Transect UID exists only in django-simple-history"
             else:
@@ -207,34 +346,56 @@ class Command(BaseCommand):
         for entry in all_logged_occurrences:
             if not self._in_year(logged_transect_years.get(entry["transect_uid"]), options):
                 continue
+            key = entry["id"] or (entry["transect_uid"], entry["number"])
             candidates = []
             if entry["id"] in occurrences_by_id:
                 candidates = [occurrences_by_id[entry["id"]]]
             elif entry["transect_uid"] is not None and entry["number"] is not None:
                 candidates = occurrences_by_parent_number[(entry["transect_uid"], entry["number"])]
             deleted = occurrence_deletions_id.get(entry["id"]) or occurrence_deletions_key.get((entry["transect_uid"], entry["number"]))
+            parent_deleted = transect_deletions.get(entry["transect_uid"])
+            alias_current = cross_device_occurrence_candidate(
+                entry, all_logged_occurrences, occurrences_by_parent_number,
+            ) if not deleted else None
+            merged_current = merged_occurrence_candidate(
+                entry, logged_instances_by_occurrence[key], workflows_by_uid,
+                occurrences_by_id,
+            ) if not deleted and not candidates else None
+            if omit_logged_occurrence(
+                entry, log_instance_counts[key], cancelled_transects,
+                deleted, parent_deleted, merged_current, alias_current,
+            ):
+                continue
             if entry.get("state") == "cancelled":
                 current = None; status, confidence, reason = "LOG_CANCELLED", "Exact", "Occurrence was cancelled in the field log"
+            elif alias_current:
+                current = alias_current
+                status, confidence = "CURRENT_EXACT", "Exact"
+                reason = "Matched cross-device occurrence alias by unique time and coordinates"
+                logged_occurrence_ids.add(current.id)
             elif len(candidates) == 1:
                 current = candidates[0]; status, confidence, reason = "CURRENT_EXACT", "Exact", "Matched by occurrence ID or transect and occurrence number"; logged_occurrence_ids.add(current.id)
             elif len(candidates) > 1:
                 current = None; status, confidence, reason = "AMBIGUOUS", "None", f"Multiple candidates: {[x.id for x in candidates]}"
             elif deleted:
                 current = None; status, confidence, reason = "DELETED_CONFIRMED", "Exact", "Matched permanent occurrence deletion evidence"
+            elif merged_current:
+                current = merged_current; status, confidence, reason = "CURRENT_EXACT", "Exact", "Matched current occurrence via all logged workflow UIDs after an occurrence merge"; logged_occurrence_ids.add(current.id)
+            elif parent_deleted:
+                current = None; status, confidence, reason = "DELETED_CONFIRMED", "Exact", "Matched permanent parent transect deletion evidence"
             elif entry["id"] in historical_occurrences:
                 current = None; status, confidence, reason = "HISTORICAL_ONLY", "Exact", "Occurrence ID exists only in django-simple-history"
             else:
                 current = None; status, confidence, reason = "MISSING", "None", "Logged occurrence not found in current or deletion tables"
             db_instances = len({w.instance_number for w in workflows if current and w.occurrence_id == current.id})
-            key = entry["id"] or (entry["transect_uid"], entry["number"])
             parent = by_transect.get(entry["transect_uid"])
             parent_label = parent.name if parent else f"UID {entry['transect_uid']}"
             field_label = f"Transect {parent_label} — occurrence {entry['number']}"
-            rows["Occurrences"].append([entry["log_id"], entry["transect_uid"], entry["id"], entry["number"], current.id if current else None, status, confidence, log_instance_counts[key], db_instances, bool(deleted), reason, field_label])
+            rows["Occurrences"].append([entry["log_id"], entry["transect_uid"], entry["id"], entry["number"], current.id if current else None, status, confidence, log_instance_counts[key], db_instances, bool(deleted or parent_deleted), reason, field_label])
             if status != "CURRENT_EXACT":
                 complete = all(value is not None for value in (entry.get("number"), entry.get("start_time"), entry.get("lat"), entry.get("long"))) and entry.get("state") == "completed"
                 parent_exists = entry["transect_uid"] in by_transect
-                if status == "LOG_CANCELLED" or entry["transect_uid"] in cancelled_transects:
+                if status == "LOG_CANCELLED" or logged_parent_transect_cancelled(entry, cancelled_transects):
                     recovery, blocker = "CANCELLED_IN_LOG", "Field log explicitly cancelled this occurrence."
                 elif status == "DELETED_CONFIRMED":
                     recovery, blocker = "INTENTIONALLY_DELETED", "Permanent deletion audit blocks automatic recovery."
@@ -246,7 +407,7 @@ class Command(BaseCommand):
                     recovery, blocker = "READY_AFTER_PARENT", "Import or approve the parent transect first."
                 else:
                     recovery, blocker = "READY_FOR_IMPORT", "Required occurrence values and current parent transect are available."
-                rows["Recovery candidates"].append(["Occurrence", field_label, recovery, "High" if recovery.startswith("READY") else "Review", entry["log_id"], entry.get("source"), f"Transect {entry['transect_uid']}", 4, bool(current), bool(deleted) or status == "HISTORICAL_ONLY", blocker, entry.get("start_time"), entry.get("lat"), entry.get("long"), entry.get("id") or entry.get("number")])
+                rows["Recovery candidates"].append(["Occurrence", field_label, recovery, "High" if recovery.startswith("READY") else "Review", entry["log_id"], entry.get("source"), f"Transect {entry['transect_uid']}", 4, bool(current), bool(deleted or parent_deleted) or status == "HISTORICAL_ONLY", blocker, entry.get("start_time"), entry.get("lat"), entry.get("long"), entry.get("id") or entry.get("number")])
             if status in ("MISSING", "AMBIGUOUS", "DELETED_CONFIRMED", "HISTORICAL_ONLY"):
                 rows["Critical findings"].append(["Critical" if status == "MISSING" else "Warning", "Occurrence", status, entry["log_id"], entry["id"] or entry["number"], reason, f"Transect {entry['transect_uid']}"])
 
@@ -259,6 +420,11 @@ class Command(BaseCommand):
                 occurrence = candidates[0] if len(candidates) == 1 else None
             candidates = [workflows_by_uid[entry["workflow_uid"]]] if entry["workflow_uid"] in workflows_by_uid else (workflows_by_instance[(occurrence.id, entry["number"])] if occurrence and entry["number"] is not None else [])
             deleted = instance_deletions.get((occurrence.id, entry["number"])) if occurrence else None
+            parent_deleted = transect_deletions.get(entry["transect_uid"])
+            if omit_logged_instance(
+                entry, cancelled_transects, deleted, parent_deleted, candidates,
+            ):
+                continue
             if entry.get("parent_occurrence", {}).get("state") == "cancelled":
                 status, confidence, reason = "LOG_CANCELLED", "Exact", "Parent occurrence was cancelled in the field log"
                 candidates = []
@@ -267,6 +433,8 @@ class Command(BaseCommand):
                 logged_workflow_ids.update(str(item.uid) for item in candidates)
             elif deleted:
                 status, confidence, reason = "DELETED_CONFIRMED", "Exact", "Matched permanent instance deletion evidence"
+            elif parent_deleted:
+                status, confidence, reason = "DELETED_CONFIRMED", "Exact", "Matched permanent parent transect deletion evidence"
             elif entry["workflow_uid"] and entry["workflow_uid"] in historical_workflows:
                 status, confidence, reason = "HISTORICAL_ONLY", "Exact", "Workflow UID exists only in django-simple-history"
             else:
@@ -274,11 +442,11 @@ class Command(BaseCommand):
             parent = by_transect.get(entry["transect_uid"])
             parent_label = parent.name if parent else f"UID {entry['transect_uid']}"
             field_label = f"Transect {parent_label} — occurrence {entry['occurrence_number']} — instance {entry['number']}"
-            rows["Instances"].append([entry["log_id"], entry["transect_uid"], entry["occurrence_id"], entry["occurrence_number"], entry["number"], entry["workflow_uid"], [str(x.uid) for x in candidates], status, confidence, sum(response_counts[str(x.uid)] for x in candidates), bool(deleted), reason, field_label])
+            rows["Instances"].append([entry["log_id"], entry["transect_uid"], entry["occurrence_id"], entry["occurrence_number"], entry["number"], entry["workflow_uid"], [str(x.uid) for x in candidates], status, confidence, sum(response_counts[str(x.uid)] for x in candidates), bool(deleted or parent_deleted), reason, field_label])
             if status != "CURRENT_EXACT":
                 template_ok = str(entry.get("template") or "").casefold() in workflow_template_ids
                 source_complete = entry.get("state") == "completed" and entry.get("response_count", 0) > 0 and bool(entry.get("parent_occurrence", {}).get("user"))
-                if status == "LOG_CANCELLED" or entry["transect_uid"] in cancelled_transects:
+                if status == "LOG_CANCELLED" or logged_parent_transect_cancelled(entry, cancelled_transects):
                     recovery, blocker = "CANCELLED_IN_LOG", "Parent occurrence was cancelled in the field log."
                 elif status == "DELETED_CONFIRMED":
                     recovery, blocker = "INTENTIONALLY_DELETED", "Permanent instance deletion audit blocks automatic recovery."
@@ -292,39 +460,51 @@ class Command(BaseCommand):
                     recovery, blocker = "READY_AFTER_PARENT", "Import or approve the parent occurrence first."
                 else:
                     recovery, blocker = "READY_FOR_IMPORT", "Workflow identity, template, collector, responses, and current parent are available."
-                rows["Recovery candidates"].append(["Instance", field_label, recovery, "High" if recovery.startswith("READY") else "Review", entry["log_id"], entry.get("source"), f"Occurrence {entry['occurrence_id'] or entry['occurrence_number']}", 6, bool(candidates), bool(deleted) or status == "HISTORICAL_ONLY", blocker, None, None, None, entry.get("workflow_uid")])
+                rows["Recovery candidates"].append(["Instance", field_label, recovery, "High" if recovery.startswith("READY") else "Review", entry["log_id"], entry.get("source"), f"Occurrence {entry['occurrence_id'] or entry['occurrence_number']}", 6, bool(candidates), bool(deleted or parent_deleted) or status == "HISTORICAL_ONLY", blocker, None, None, None, entry.get("workflow_uid")])
             if status in ("MISSING", "AMBIGUOUS", "DELETED_CONFIRMED", "HISTORICAL_ONLY"):
                 rows["Critical findings"].append(["Critical" if status == "MISSING" else "Warning", "Instance", status, entry["log_id"], entry["number"], reason, f"Occurrence {entry['occurrence_id'] or entry['occurrence_number']}"])
 
         seen_recovery_tracks = set()
+        seen_recovery_track_slots = set()
         for item in parsed:
             for point in item.track_points:
                 uid, event = point["transect_uid"], point.get("event") or "OTHER"
                 if not self._in_year(logged_transect_years.get(uid), options):
                     continue
+                # Pause/resume commands remain parsed evidence but have no
+                # matching legacy database flag and are not recovery work.
+                if not is_recoverable_track_event(event):
+                    continue
                 time = point.get("time")
                 time_key = time.replace(tzinfo=None) if time and time.tzinfo else time
                 lat, long = point.get("lat"), point.get("long")
+                # These remain visible in source/deletion evidence, but are
+                # not actionable recovery records.
+                if uid in transect_deletions or not has_valid_track_coordinates(lat, long):
+                    continue
+                user = str(point.get("user") or "").strip().casefold()
                 if lat is None or long is None:
-                    key = (uid, time_key, lat, long, event)
+                    key = (uid, user, time_key, lat, long, event)
                 else:
-                    key = (uid, time_key, round(float(lat), 8), round(float(long), 8), event)
-                if key in database_track_keys or key in seen_recovery_tracks:
+                    key = (uid, user, time_key, round(float(lat), 8), round(float(long), 8), event)
+                legacy_key = legacy_track_key(uid, user, time_key, lat, long, event)
+                legacy_slot = legacy_track_slot_key(uid, user, time_key, event)
+                if (key in database_track_keys or legacy_key in database_legacy_track_keys
+                        or legacy_slot in database_legacy_track_slots
+                        or key in seen_recovery_tracks
+                        or legacy_slot in seen_recovery_track_slots):
                     continue
                 seen_recovery_tracks.add(key)
+                seen_recovery_track_slots.add(legacy_slot)
                 parent = by_transect.get(uid)
-                valid_coordinates = lat is not None and long is not None and -90 <= lat <= 90 and -180 <= long <= 180 and not (lat == 0 and long == 0)
-                direct_event = event in {"CHECKPOINT", "TURNAROUND"}
                 if uid in cancelled_transects:
                     recovery, blocker = "CANCELLED_IN_LOG", "Parent transect was cancelled in the field log."
                 elif uid in transect_deletions:
                     recovery, blocker = "INTENTIONALLY_DELETED", "Parent transect has permanent deletion evidence."
                 elif uid in historical_transects and not parent:
                     recovery, blocker = "REVIEW_REQUIRED", "Parent transect exists only in history."
-                elif not valid_coordinates or not time or not point.get("user"):
-                    recovery, blocker = "INSUFFICIENT_LOG_DATA", "GPS point requires valid non-zero coordinates, timestamp, and collector."
-                elif not direct_event:
-                    recovery, blocker = "REVIEW_REQUIRED", f"Event {event} has no approved direct database flag mapping."
+                elif not time or not point.get("user"):
+                    recovery, blocker = "INSUFFICIENT_LOG_DATA", "GPS point requires a timestamp and collector."
                 elif not parent:
                     recovery, blocker = "READY_AFTER_PARENT", "Import or approve the parent transect first."
                 else:
@@ -376,7 +556,7 @@ class Command(BaseCommand):
         return [
             ["Scope", "Read-only comparison of stored log contents, current completed tables, link records, and permanent deletion audits."],
             ["Transect match", "Exact UID/link first; unique normalized name is labelled probable; multiple candidates remain ambiguous."],
-            ["Occurrence match", "Exact ID first, then exact transect UID plus occurrence number."],
+            ["Occurrence match", "Exact ID first, then unique cross-device time/coordinate aliases, then exact transect UID plus occurrence number."],
             ["Instance match", "Workflow UID first, then logical occurrence plus instance number. Multiple workflows may form one instance."],
             ["GPS cutoff", options["gps_required_from_year"] or "Not supplied; trackless records have unknown expectation."],
             ["Limitation", "Database-only does not mean erroneous: source logs may be missing, incomplete, or manually edited."],

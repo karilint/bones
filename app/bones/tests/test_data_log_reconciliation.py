@@ -1,5 +1,8 @@
 import json
 import tempfile
+from collections import defaultdict
+from contextlib import ExitStack
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -10,6 +13,15 @@ from django.urls import reverse
 from openpyxl import load_workbook
 
 from ..forms_reports import DataReconciliationReportForm
+from ..management.commands.reconcile_data_logs import (
+    Command, cross_device_occurrence_candidate, has_valid_track_coordinates,
+    is_empty_logged_occurrence,
+    filter_reconciliation_rows, is_recoverable_track_event,
+    logged_parent_transect_cancelled, omit_logged_instance,
+    omit_logged_occurrence,
+    legacy_track_key,
+    merged_occurrence_candidate,
+)
 from ..navigation import navigation_context
 from ..reports.data_log_reconciliation import SHEETS, gps_status, parse_log, summary_rows, workbook_bytes, write_workbook
 from ..views.reports import DataReconciliationReportView
@@ -72,8 +84,68 @@ class DataLogParserTests(SimpleTestCase):
         self.assertEqual(gps_status(2020, 1, 0, 2010), "GPS_PRESENT")
         self.assertEqual(gps_status(2020, 0, 0, None), "GPS_EXPECTATION_UNKNOWN")
 
+    def test_empty_line_log_occurrence_is_identified_without_hiding_json_records(self):
+        payload = "\n".join([
+            "STARTTRANSECT template-guid 17 2.4,-1.4 01-Jan-2025 10:00:00 1",
+            "/STARTTRANSECT primary 2.4,-1.4 User",
+            "STARTOCCURRENCE 5 2.4,-1.4 01-Jan-2025 10:01:00",
+            "/STARTOCCURRENCE secondary Fire",
+            "ENDOCCURRENCE OUT",
+            "/ENDOCCURRENCE 01-Jan-2025 10:01:02",
+        ])
+        occurrence = parse_log(1, payload).occurrences[0]
+
+        self.assertTrue(is_empty_logged_occurrence(occurrence, 0))
+        self.assertFalse(is_empty_logged_occurrence(occurrence, 1))
+        self.assertFalse(is_empty_logged_occurrence({}, 0))
+
+    def test_occurrence_omission_is_scoped_and_keeps_valid_merge(self):
+        complete = {
+            "transect_uid": 17, "evidence_count": 1,
+            "parent_transect": {"state": "completed"},
+        }
+        self.assertFalse(omit_logged_occurrence(complete, 0, {17}))
+        cancelled = {**complete, "parent_transect": {"state": "cancelled"}}
+        self.assertTrue(omit_logged_occurrence(cancelled, 1, set()))
+        self.assertTrue(omit_logged_occurrence(complete, 1, set(), deleted=object()))
+        self.assertTrue(omit_logged_occurrence(complete, 1, set(), parent_deleted=object()))
+        self.assertFalse(omit_logged_occurrence(
+            complete, 1, set(), parent_deleted=object(), merged_current=object(),
+        ))
+        self.assertFalse(logged_parent_transect_cancelled(complete, {17}))
+        self.assertTrue(logged_parent_transect_cancelled(cancelled, set()))
+
 
 class ReconciliationWorkbookTests(SimpleTestCase):
+    def test_pause_and_resume_are_not_recovery_events(self):
+        self.assertTrue(is_recoverable_track_event("CHECKPOINT"))
+        self.assertTrue(is_recoverable_track_event("TURNAROUND"))
+        self.assertFalse(is_recoverable_track_event("PAUSETRANSECT"))
+        self.assertFalse(is_recoverable_track_event("RESUMETRANSECT"))
+
+    def test_invalid_coordinates_are_not_recovery_evidence(self):
+        self.assertTrue(has_valid_track_coordinates(-0.04, 36.87))
+        self.assertFalse(has_valid_track_coordinates(0, 0))
+        self.assertFalse(has_valid_track_coordinates(None, 36.87))
+        self.assertFalse(has_valid_track_coordinates(91, 36.87))
+
+    def test_legacy_track_key_rounds_sql_precision_and_keeps_device(self):
+        briana = legacy_track_key(
+            17, "Briana", datetime(2025, 1, 1, 10, 39, 48),
+            -0.0407316667, 36.8723816667, "CHECKPOINT",
+        )
+        stored = legacy_track_key(
+            17, "Briana", datetime(2025, 1, 1, 10, 40),
+            -0.040732, 36.872382, "CHECKPOINT",
+        )
+        fire = legacy_track_key(
+            17, "Fire", datetime(2025, 1, 1, 10, 39, 48),
+            -0.0407316667, 36.8723816667, "CHECKPOINT",
+        )
+
+        self.assertEqual(briana, stored)
+        self.assertNotEqual(briana, fire)
+
     def test_summary_counts_status_columns_not_identifiers(self):
         rows = {
             "Transects": [[1, 17, None, "T", 2025, "MISSING"]],
@@ -84,6 +156,17 @@ class ReconciliationWorkbookTests(SimpleTestCase):
         self.assertEqual(summary["Status: MISSING"], 1)
         self.assertEqual(summary["Status: DELETED_CONFIRMED"], 1)
         self.assertEqual(summary["Status: HISTORICAL_ONLY"], 1)
+
+    def test_deleted_entity_status_is_never_presentation_work(self):
+        rows = {
+            "Transects": [[1, 17, None, "T", 2025, "DELETED_CONFIRMED"]],
+            "Occurrences": [], "Instances": [], "GPS": [],
+            "Critical findings": [],
+            "Recovery candidates": [["Occurrence", "Keep", "READY_FOR_IMPORT"]],
+        }
+        filter_reconciliation_rows(rows, {"DELETED_CONFIRMED"})
+        self.assertEqual(rows["Transects"], [])
+        self.assertEqual(rows["Recovery candidates"], [["Occurrence", "Keep", "READY_FOR_IMPORT"]])
 
     def test_workbook_has_review_sheets_and_headers(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -100,6 +183,144 @@ class ReconciliationWorkbookTests(SimpleTestCase):
         workbook.close()
 
 
+class ParentTransectDeletionTests(SimpleTestCase):
+    def test_cancelled_deleted_and_empty_instances_are_omitted(self):
+        complete = {
+            "transect_uid": 17, "state": "completed", "response_count": 1,
+        }
+        self.assertTrue(omit_logged_instance(complete, {17}))
+        self.assertFalse(omit_logged_instance(
+            {**complete, "parent_transect": {"state": "completed"}}, {17},
+        ))
+        self.assertTrue(omit_logged_instance(
+            {**complete, "parent_transect": {"state": "cancelled"}}, set(),
+        ))
+        self.assertFalse(omit_logged_instance(
+            {**complete, "parent_transect": {"state": "cancelled"}}, set(),
+            current_matches=[object()],
+        ))
+        self.assertTrue(omit_logged_instance(complete, set(), deleted=object()))
+        self.assertTrue(omit_logged_instance(complete, set(), parent_deleted=object()))
+        self.assertTrue(omit_logged_instance(
+            {"transect_uid": 17, "state": "started", "response_count": 0}, set(),
+        ))
+        self.assertFalse(omit_logged_instance(complete, set()))
+
+    def test_all_workflow_uids_identify_occurrence_merged_to_another_transect(self):
+        entry = {"transect_uid": 17, "number": 3}
+        logged = [{"workflow_uid": "wf-1"}, {"workflow_uid": "wf-2"}]
+        workflows = {
+            "wf-1": SimpleNamespace(occurrence_id=91),
+            "wf-2": SimpleNamespace(occurrence_id=91),
+        }
+        current = SimpleNamespace(id=91, transect_id=23, occurrence_number=3)
+
+        self.assertIs(
+            merged_occurrence_candidate(entry, logged, workflows, {91: current}),
+            current,
+        )
+        self.assertIsNone(merged_occurrence_candidate(
+            entry, logged, {"wf-1": workflows["wf-1"]}, {91: current},
+        ))
+
+    def test_exact_workflow_uid_recognizes_same_transect_number_merge(self):
+        entry = {"transect_uid": 17, "number": 11}
+        logged = [{"workflow_uid": "wf-1"}]
+        workflow = SimpleNamespace(occurrence_id=91)
+        current = SimpleNamespace(id=91, transect_id=17, occurrence_number=10)
+
+        self.assertIs(
+            merged_occurrence_candidate(
+                entry, logged, {"wf-1": workflow}, {91: current},
+            ),
+            current,
+        )
+
+    def test_cross_device_occurrence_alias_uses_unique_time_and_coordinates(self):
+        current = SimpleNamespace(id=616, transect_id=3967792, occurrence_number=4)
+        fire = {
+            "log_id": 12, "transect_uid": 3967792, "number": 5,
+            "start_time": datetime(2018, 8, 18, 10, 59, 42),
+            "lat": 0.0779399995, "long": 36.917475, "user": "Fire",
+            "state": "completed", "evidence_count": 1,
+        }
+        briana = {
+            "log_id": 6, "transect_uid": 3967792, "number": 4,
+            "start_time": datetime(2018, 8, 18, 11, 0, 55),
+            "lat": 0.0779, "long": 36.9174899328, "user": "Briana",
+            "state": "completed", "evidence_count": 13,
+        }
+        candidates = defaultdict(list)
+        candidates[(3967792, 4)].append(current)
+
+        self.assertIs(
+            cross_device_occurrence_candidate(fire, [fire, briana], candidates),
+            current,
+        )
+        self.assertFalse(omit_logged_occurrence(
+            {**fire, "evidence_count": 0}, 0, set(), alias_current=current,
+        ))
+
+    def test_cross_device_occurrence_alias_rejects_ambiguous_matches(self):
+        fire = {
+            "log_id": 12, "transect_uid": 7, "number": 5,
+            "start_time": datetime(2018, 8, 18, 10, 0),
+            "lat": 1.0, "long": 2.0, "user": "Fire",
+            "state": "completed", "evidence_count": 0,
+        }
+        peers = [
+            {
+                **fire, "log_id": index, "number": number, "user": "Briana",
+                "evidence_count": 1,
+            }
+            for index, number in ((1, 3), (2, 4))
+        ]
+        candidates = defaultdict(list)
+        candidates[(7, 3)].append(SimpleNamespace(id=3))
+        candidates[(7, 4)].append(SimpleNamespace(id=4))
+
+        self.assertIsNone(
+            cross_device_occurrence_candidate(fire, [fire, *peers], candidates)
+        )
+
+    def test_parent_deletion_confirms_logged_occurrence_and_instance_deletions(self):
+        parsed = SimpleNamespace(
+            error="", log_id=1, track_points=[],
+            transects=[{"log_id": 1, "uid": 17, "name": "Test", "template": "tt", "start_time": datetime(2025, 1, 1), "state": "completed", "source": "line 1"}],
+            occurrences=[{"log_id": 1, "transect_uid": 17, "id": None, "number": 1, "start_time": datetime(2025, 1, 1, 0, 1), "lat": 1, "long": 2, "state": "completed", "source": "line 2"}],
+            instances=[{"log_id": 1, "transect_uid": 17, "occurrence_id": None, "occurrence_number": 1, "number": 1, "workflow_uid": "wf", "template": "tw", "state": "completed", "response_count": 1, "parent_occurrence": {"user": "Tester"}, "source": "line 3"}],
+        )
+        model_names = (
+            "CompletedTransect", "CompletedOccurrence", "CompletedWorkflow",
+            "CompletedResponse", "CompletedTransectTrack", "TransectDataLog",
+            "TemplateTransect", "TemplateWorkflow", "OccurrenceDeletion",
+            "InstanceDeletion",
+        )
+        deletion = SimpleNamespace(
+            transect_uid=17, deleted_at=datetime(2025, 1, 2),
+            reason="Test transect", pk="audit-1",
+        )
+        with ExitStack() as stack:
+            for name in model_names:
+                stack.enter_context(patch(f"bones.management.commands.reconcile_data_logs.{name}.objects"))
+            for name in ("CompletedTransect", "CompletedOccurrence", "CompletedWorkflow"):
+                stack.enter_context(patch(f"bones.management.commands.reconcile_data_logs.{name}.history"))
+            transect_deletions = stack.enter_context(
+                patch("bones.management.commands.reconcile_data_logs.TransectDeletion.objects")
+            )
+            transect_deletions.all.return_value = [deletion]
+            rows = Command()._reconcile(
+                [parsed], [{"id": 1, "upload_date": None, "uploaded_by": "Tester"}],
+                {"from_year": None, "to_year": None, "gps_required_from_year": None},
+            )
+
+        self.assertEqual(rows["Occurrences"], [])
+        self.assertEqual(rows["Instances"], [])
+        recovery = {(row[0], row[2]) for row in rows["Recovery candidates"]}
+        self.assertNotIn(("Occurrence", "INTENTIONALLY_DELETED"), recovery)
+        self.assertNotIn(("Instance", "INTENTIONALLY_DELETED"), recovery)
+
+
 class ReconciliationReportUITests(SimpleTestCase):
     def setUp(self):
         self.factory = RequestFactory()
@@ -111,10 +332,18 @@ class ReconciliationReportUITests(SimpleTestCase):
         self.assertNotIn("CURRENT_EXACT", statuses)
         self.assertNotIn("LOG_CANCELLED", statuses)
         self.assertNotIn("GPS_PRESENT", statuses)
+        self.assertNotIn("DELETED_CONFIRMED", dict(form.fields["statuses"].choices))
         recovery = set(form.fields["recovery_statuses"].initial)
         self.assertIn("READY_FOR_IMPORT", recovery)
         self.assertNotIn("INTENTIONALLY_DELETED", recovery)
+        self.assertNotIn("INTENTIONALLY_DELETED", dict(form.fields["recovery_statuses"].choices))
         self.assertNotIn("CANCELLED_IN_LOG", dict(form.fields["recovery_statuses"].choices))
+
+    def test_log_selector_defers_large_payload_contents(self):
+        form = DataReconciliationReportForm()
+        deferred, is_deferred = form.fields["logs"].queryset.query.deferred_loading
+        self.assertTrue(is_deferred)
+        self.assertIn("contents", deferred)
 
     def test_year_range_must_be_chronological(self):
         form = DataReconciliationReportForm(data={

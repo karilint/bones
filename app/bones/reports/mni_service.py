@@ -12,6 +12,18 @@ from .mni import ElementRule, Observation, OccurrenceRecord, calculate_mni
 ELIGIBLE_WORKFLOWS = ("Bone", "Dentition")
 HABITAT_QUESTION = "Transect physical habitat"
 RESERVE_QUESTION = "On old reserve?"
+SQL_SERVER_IN_BATCH_SIZE = 1000
+
+
+def rows_in_batches(queryset, field_name, values,
+                    batch_size=SQL_SERVER_IN_BATCH_SIZE):
+    """Evaluate an ``IN`` lookup without exceeding SQL Server's parameter cap."""
+    values = list(values)
+    rows = []
+    for offset in range(0, len(values), batch_size):
+        batch = values[offset:offset + batch_size]
+        rows.extend(queryset.filter(**{f"{field_name}__in": batch}))
+    return rows
 
 
 def clean(value):
@@ -136,14 +148,22 @@ def eligible_transects(cleaned_data, note_filters=(), apply_population_rules=Tru
     return qs.select_related("transect_template").order_by("uid").distinct()
 
 
-def build_report(cleaned_data, note_filters=(), apply_population_rules=True):
+def build_report(
+    cleaned_data, note_filters=(), apply_population_rules=True,
+    element_rule_rows=None,
+):
     transects = list(eligible_transects(
         cleaned_data, note_filters,
         apply_population_rules=apply_population_rules,
     ))
     transect_ids = [row.pk for row in transects]
     warnings = []
-    info_rows = list(CompletedTransectInfo.objects.filter(transect_id__in=transect_ids).values("transect_id", "pre_or_post", "question_text", "response"))
+    info_rows = rows_in_batches(
+        CompletedTransectInfo.objects.values(
+            "transect_id", "pre_or_post", "question_text", "response"
+        ),
+        "transect_id", transect_ids,
+    )
     by_transect = defaultdict(list)
     for row in info_rows:
         by_transect[row["transect_id"]].append(row)
@@ -159,10 +179,19 @@ def build_report(cleaned_data, note_filters=(), apply_population_rules=True):
         if reserve_conflict:
             warnings.append(_warning("conflicting_reserve", transect.pk, raw_value=reserve, treatment="Reserve grouping omitted"))
 
-    occurrences = list(CompletedOccurrence.objects.filter(transect_id__in=transect_ids, state__iexact="Completed"))
+    occurrences = rows_in_batches(
+        CompletedOccurrence.objects.filter(state__iexact="Completed"),
+        "transect_id", transect_ids,
+    )
     occurrence_ids = [row.pk for row in occurrences]
     occurrence_info = defaultdict(dict)
-    for row in CompletedOccurrenceInfo.objects.filter(occurrence_id__in=occurrence_ids).values("occurrence_id", "pre_or_post", "question_text", "response"):
+    occurrence_info_rows = rows_in_batches(
+        CompletedOccurrenceInfo.objects.values(
+            "occurrence_id", "pre_or_post", "question_text", "response"
+        ),
+        "occurrence_id", occurrence_ids,
+    )
+    for row in occurrence_info_rows:
         key = f'{row["pre_or_post"]}: {row["question_text"]}'.casefold()
         occurrence_info[row["occurrence_id"]][key] = row["response"]
 
@@ -181,10 +210,21 @@ def build_report(cleaned_data, note_filters=(), apply_population_rules=True):
 
     occurrence_taxa = {row.pk: taxon_for(row) for row in occurrences}
     occurrence_records = [OccurrenceRecord(row.pk, row.transect_id, occurrence_taxa[row.pk], habitat_by_transect.get(row.transect_id, "")) for row in occurrences]
-    workflows = list(CompletedWorkflow.objects.filter(occurrence_id__in=occurrence_ids, template_workflow__name__in=ELIGIBLE_WORKFLOWS).select_related("template_workflow"))
+    workflows = rows_in_batches(
+        CompletedWorkflow.objects.filter(
+            template_workflow__name__in=ELIGIBLE_WORKFLOWS,
+        ).select_related("template_workflow"),
+        "occurrence_id", occurrence_ids,
+    )
     workflow_ids = [row.pk for row in workflows]
     workflow_answers = defaultdict(dict)
-    for row in CompletedResponse.objects.filter(workflow_id__in=workflow_ids, skipped=False).values("workflow_id", "question_text", "response"):
+    response_rows = rows_in_batches(
+        CompletedResponse.objects.filter(skipped=False).values(
+            "workflow_id", "question_text", "response"
+        ),
+        "workflow_id", workflow_ids,
+    )
+    for row in response_rows:
         workflow_answers[row["workflow_id"]][row["question_text"].casefold()] = row["response"]
     workflows_by_occurrence = defaultdict(list)
     for workflow in workflows:
@@ -232,7 +272,9 @@ def build_report(cleaned_data, note_filters=(), apply_population_rules=True):
             occurrence_taxa[occurrence.pk], sex, age, weathering, clean(element).casefold(), side,
             complete, habitat_by_transect.get(occurrence.transect_id, "")))
 
-    element_rules = {row.canonical_name.casefold(): ElementRule(row.canonical_name, row.divisor, row.paired, row.excluded, row.active and row.reviewed) for row in MNIElementRule.objects.all()}
+    if element_rule_rows is None:
+        element_rule_rows = MNIElementRule.objects.all()
+    element_rules = {row.canonical_name.casefold(): ElementRule(row.canonical_name, row.divisor, row.paired, row.excluded, row.active and row.reviewed) for row in element_rule_rows}
     excluded = list(cleaned_data.get("excluded_taxa", []))
     result = calculate_mni(observations, occurrence_records, element_rules, excluded, warnings)
     result.transect_metadata = {

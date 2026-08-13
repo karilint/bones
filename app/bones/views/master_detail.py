@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Mapping, Sequence
 
+from django.core.paginator import Paginator
 from django.db import DatabaseError
 from django.db.models import Count, Prefetch, Q
 from django.utils.translation import gettext_lazy as _
@@ -17,7 +18,13 @@ from .detail import (
 )
 from ..image_views import image_context, instance_key
 from ..maps import map_context
-from ..models import CompletedOccurrence, CompletedTransect, EntityImage
+from ..models import (
+    CompletedOccurrence,
+    CompletedResponse,
+    CompletedTransect,
+    CompletedWorkflow,
+    EntityImage,
+)
 from ..reports.mni_detail import build_mni_detail, empty_mni_detail
 from .mixins import BonesAuthMixin
 
@@ -131,9 +138,27 @@ class CompletedTransectDetailView(BonesMasterDetailView):
         # Load occurrence summaries rather than every nested response/workflow.
         occurrence_summaries = (
             CompletedOccurrence.objects.with_details()
-            .annotate(
-                response_count=Count("responses", distinct=True),
-                workflow_count=Count("workflows", distinct=True),
+            .with_related_counts()
+            .prefetch_related(
+                Prefetch(
+                    "responses",
+                    queryset=CompletedResponse.objects.filter(
+                        skipped=False,
+                        question_text__iexact="What element is this?",
+                    )
+                    .exclude(response__isnull=True)
+                    .exclude(response="")
+                    .select_related("workflow")
+                    .order_by("workflow__instance_number", "question_number", "pk"),
+                    to_attr="element_responses",
+                ),
+                Prefetch(
+                    "workflows",
+                    queryset=CompletedWorkflow.objects.filter(
+                        template_workflow__name__iexact="Dentition"
+                    ).select_related("template_workflow"),
+                    to_attr="dentition_workflows",
+                ),
             )
             .order_by("occurrence_number", "pk")
         )
@@ -235,6 +260,7 @@ class CompletedTransectDetailView(BonesMasterDetailView):
             {"label": _("Occurrence")},
             {"label": _("Taxon")},
             {"label": _("Taxon Guess")},
+            {"label": _("Elements")},
             {"label": _("State")},
             {"label": _("Started")},
             {"label": _("Ended")},
@@ -266,6 +292,11 @@ class CompletedTransectDetailView(BonesMasterDetailView):
                             )
                         )
                     },
+                    {
+                        "value": format_value(
+                            self._occurrence_elements(occurrence)
+                        )
+                    },
                     {"value": format_value(occurrence.state)},
                     {"value": format_datetime(occurrence.recording_start_time)},
                     {"value": format_datetime(occurrence.recording_end_time)},
@@ -280,6 +311,23 @@ class CompletedTransectDetailView(BonesMasterDetailView):
                 ]
             )
         return headers, rows
+
+    @staticmethod
+    def _occurrence_elements(occurrence: Any) -> str:
+        elements = [
+            (response.workflow.instance_number, response.response)
+            for response in getattr(occurrence, "element_responses", [])
+            if response.response
+        ]
+        element_instances = {instance for instance, _element in elements}
+        elements.extend(
+            (workflow.instance_number, "tooth")
+            for workflow in getattr(occurrence, "dentition_workflows", [])
+            if workflow.instance_number not in element_instances
+        )
+        return ", ".join(
+            f"({instance}) {element}" for instance, element in sorted(elements)
+        )
 
     @classmethod
     def _related_count(cls, occurrence: Any, annotation: str, relation: str) -> int:
@@ -303,6 +351,7 @@ class CompletedTransectDetailView(BonesMasterDetailView):
 
     def get_track_point_table(self) -> tuple[list[dict[str, Any]], list[list[dict[str, Any]]]]:
         headers = [
+            {"label": _("User / device")},
             {"label": _("Timestamp")},
             {"label": _("Latitude")},
             {"label": _("Longitude")},
@@ -318,6 +367,7 @@ class CompletedTransectDetailView(BonesMasterDetailView):
         for point in track_entries:
             rows.append(
                 [
+                    {"value": format_value(point.user)},
                     {"value": format_datetime(point.time)},
                     {"value": format_value(point.lat)},
                     {"value": format_value(point.long)},
@@ -433,6 +483,7 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
         "Side",
         "Weathering class",
     )
+    responses_per_page = 100
 
     def get_queryset(self):
         return (
@@ -440,7 +491,8 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
                 "transect",
                 "transect__transect_template",
             )
-            .with_related_data()
+            .with_workflows()
+            .with_details()
         )
 
     def get_extra_actions(self) -> Iterable[Mapping[str, Any]]:
@@ -823,8 +875,36 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
         context = super().get_context_data(**kwargs)
         detail_headers, detail_rows = self.get_detail_table()
         workflows = self._as_list(getattr(self.object, "workflows", None))
-        responses = self._as_list(getattr(self.object, "responses", None))
-        response_question_choices = self.get_response_question_choices(responses)
+        response_queryset = (
+            CompletedResponse.objects.select_related("workflow__template_workflow")
+            .only(
+                "id",
+                "question_number",
+                "question_text",
+                "response",
+                "response_code",
+                "skipped",
+                "workflow",
+                "workflow__uid",
+                "workflow__instance_number",
+                "workflow__template_workflow",
+                "workflow__template_workflow__id",
+                "workflow__template_workflow__name",
+            )
+            .filter(
+                occurrence_id=self.object.pk,
+                skipped=False,
+            )
+        )
+        response_question_choices = sorted(
+            filter(
+                None,
+                response_queryset.order_by()
+                .values_list("question_text", flat=True)
+                .distinct(),
+            ),
+            key=str.casefold,
+        )
         response_filter_applied = "response_filter_applied" in self.request.GET
         if response_filter_applied:
             selected_response_questions = self.request.GET.getlist("response_question")
@@ -840,15 +920,51 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
         )
         match_question = self.request.GET.get("match_question", "").strip()
         match_response = self.request.GET.get("match_response", "").strip()
+        if selected_response_question_set is not None:
+            response_queryset = response_queryset.filter(
+                question_text__in=selected_response_question_set
+            )
+        if match_question and match_response:
+            matching_instances = list(
+                CompletedResponse.objects.filter(
+                    occurrence_id=self.object.pk,
+                    skipped=False,
+                    question_text__iexact=match_question,
+                    response__iexact=match_response,
+                )
+                .values_list("workflow__instance_number", flat=True)
+                .distinct()
+            )
+            response_queryset = response_queryset.filter(
+                workflow__instance_number__in=matching_instances
+            )
+        response_queryset = response_queryset.order_by(
+            "workflow__instance_number",
+            "question_number",
+            "pk",
+        )
+        response_paginator = Paginator(response_queryset, self.responses_per_page)
+        response_page = response_paginator.get_page(
+            self.request.GET.get("response_page")
+        )
+        responses = list(response_page.object_list)
+        if response_paginator.count:
+            page_instances = {
+                self._resolve_instance_number(response) for response in responses
+            }
+            display_workflows = [
+                workflow
+                for workflow in workflows
+                if workflow.instance_number in page_instances
+            ]
+        else:
+            display_workflows = workflows
         response_headers, response_rows = self.get_response_table(responses=responses)
         workflow_headers, workflow_rows = self.get_workflow_table(workflows=workflows)
         history_entries = self.get_history_entries()
         occurrence_instances = self.get_instance_summaries(
-            workflows=workflows,
+            workflows=display_workflows,
             responses=responses,
-            question_texts=selected_response_question_set,
-            match_question=match_question,
-            match_response=match_response,
         )
         images_by_instance = self.get_instance_images(
             instance["number"] for instance in occurrence_instances
@@ -866,22 +982,30 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
                 "occurrence_workflow_rows": workflow_rows,
                 "occurrence_instances": occurrence_instances,
                 "response_question_choices": response_question_choices,
-                "response_value_choices": self.get_response_value_choices(responses),
+                "response_value_choices": sorted(
+                    filter(
+                        None,
+                        CompletedResponse.objects.filter(
+                            occurrence_id=self.object.pk,
+                            skipped=False,
+                        )
+                        .order_by()
+                        .values_list("response", flat=True)
+                        .distinct(),
+                    ),
+                    key=str.casefold,
+                ),
                 "selected_response_questions": selected_response_questions,
                 "match_question": match_question,
                 "match_response": match_response,
+                "occurrence_response_page": response_page,
+                "response_page_querystring": self._response_page_querystring(),
                 "occurrence_history_entries": history_entries,
                 "occurrence_history_error": self.history_error,
             }
         )
-        try:
-            context["mni_detail"] = build_mni_detail(
-                self.object.transect_id, occurrence_id=self.object.pk
-            )
-        except DatabaseError:
-            context["mni_detail"] = empty_mni_detail(
-                _("MNI is temporarily unavailable.")
-            )
+        context["mni_detail"] = self.get_mni_detail()
+        context["mni_load_url"] = self.get_mni_load_url()
         context.update(image_context("occurrence", self.object.pk, self.request.user))
         context.update(
             map_context(
@@ -892,3 +1016,25 @@ class CompletedOccurrenceDetailView(BonesMasterDetailView):
             )
         )
         return context
+
+    def get_mni_detail(self) -> dict[str, Any] | None:
+        """Defer the transect-wide calculation until the MNI tab is requested."""
+        if self.request.GET.get("load_mni") != "1":
+            return None
+        try:
+            return build_mni_detail(
+                self.object.transect_id, occurrence_id=self.object.pk
+            )
+        except DatabaseError:
+            return empty_mni_detail(_("MNI is temporarily unavailable."))
+
+    def get_mni_load_url(self) -> str:
+        params = self.request.GET.copy()
+        params["load_mni"] = "1"
+        return f"?{params.urlencode()}#mni"
+
+    def _response_page_querystring(self) -> str:
+        params = self.request.GET.copy()
+        params.pop("response_page", None)
+        encoded = params.urlencode()
+        return f"&{encoded}" if encoded else ""

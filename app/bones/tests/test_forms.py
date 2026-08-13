@@ -5,6 +5,7 @@ from ..forms import (
     CompletedOccurrenceForm,
     CompletedTransectForm,
     CompletedWorkflowForm,
+    DataLogFileForm,
     QuestionForm,
 )
 
@@ -41,3 +42,8 @@ class Select2FormWidgetTests(SimpleTestCase):
             self.assertIsInstance(widget, ModelSelect2Widget)
             self.assertEqual(widget.attrs.get("style"), "width: 100%")
             self.assertIn("data-placeholder", widget.attrs)
+
+    def test_data_log_form_does_not_load_or_repost_payload(self):
+        self.assertEqual(
+            list(DataLogFileForm.base_fields), ["upload_date", "uploaded_by"]
+        )

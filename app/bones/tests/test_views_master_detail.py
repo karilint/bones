@@ -1,10 +1,12 @@
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from django.template.loader import render_to_string
+from django.core.paginator import Paginator
 from django.test import RequestFactory, SimpleTestCase
 
+from ..models import CompletedOccurrence
 from ..views.master_detail import (
     BonesMasterDetailView,
     CompletedOccurrenceDetailView,
@@ -59,6 +61,15 @@ class MasterDetailViewTests(SimpleTestCase):
             recording_end_time=None,
             responses=[],
             workflows=[],
+            element_responses=[
+                SimpleNamespace(
+                    response="Femur", workflow=SimpleNamespace(instance_number=1)
+                ),
+                SimpleNamespace(
+                    response="Tibia", workflow=SimpleNamespace(instance_number=2)
+                ),
+            ],
+            dentition_workflows=[SimpleNamespace(instance_number=3)],
             details=DummyManager(
                 [
                     SimpleNamespace(
@@ -83,6 +94,25 @@ class MasterDetailViewTests(SimpleTestCase):
         )
         self.assertEqual(
             [cell["value"] for cell in rows[0]][1:3], ["Bird", "Robin"]
+        )
+        labels = [header["label"] for header in headers]
+        self.assertEqual(
+            rows[0][labels.index("Elements")]["value"],
+            "(1) Femur, (2) Tibia, (3) tooth",
+        )
+
+    def test_dentition_does_not_replace_an_explicit_element(self):
+        occurrence = SimpleNamespace(
+            element_responses=[
+                SimpleNamespace(
+                    response="Molar", workflow=SimpleNamespace(instance_number=3)
+                )
+            ],
+            dentition_workflows=[SimpleNamespace(instance_number=3)],
+        )
+
+        self.assertEqual(
+            CompletedTransectDetailView._occurrence_elements(occurrence), "(3) Molar"
         )
     def test_completed_transect_occurrence_counts_use_annotations(self):
         class UnexpectedRelationAccess:
@@ -111,11 +141,119 @@ class MasterDetailViewTests(SimpleTestCase):
         labels = [header["label"] for header in headers]
         self.assertEqual(rows[0][labels.index("Responses")]["value"], 12)
         self.assertEqual(rows[0][labels.index("Workflows")]["value"], 4)
+
+    def test_related_counts_use_independent_correlated_subqueries(self):
+        sql = str(CompletedOccurrence.objects.with_related_counts().query)
+
+        self.assertIn("SELECT COUNT(", sql)
+        self.assertNotIn("LEFT OUTER JOIN", sql)
     def test_completed_occurrence_tabs_include_images(self):
         view = CompletedOccurrenceDetailView()
         self.assertIn("images", [tab["id"] for tab in view.get_tabs()])
         self.assertIn("map", [tab["id"] for tab in view.get_tabs()])
         self.assertIn("mni", [tab["id"] for tab in view.get_tabs()])
+
+    def test_transect_track_table_identifies_recording_device(self):
+        view = CompletedTransectDetailView()
+        view.object = SimpleNamespace(
+            track_points=SimpleNamespace(
+                all=lambda: [SimpleNamespace(
+                    user="Briana", time=None, lat=1, long=2,
+                    is_start=False, is_checkpoint=True, is_occurrence=False,
+                    is_turn_point=False, is_end=False,
+                )]
+            )
+        )
+
+        headers, rows = view.get_track_point_table()
+
+        self.assertEqual(headers[0]["label"], "User / device")
+        self.assertEqual(rows[0][0]["value"], "Briana")
+
+    @patch("bones.views.master_detail.CompletedOccurrence.objects")
+    def test_occurrence_detail_does_not_prefetch_all_responses(self, objects):
+        selected = MagicMock()
+        workflows = MagicMock()
+        details = MagicMock()
+        objects.select_related.return_value = selected
+        selected.with_workflows.return_value = workflows
+        workflows.with_details.return_value = details
+
+        queryset = CompletedOccurrenceDetailView().get_queryset()
+
+        self.assertIs(queryset, details)
+        selected.with_related_data.assert_not_called()
+
+    def test_response_pagination_preserves_filter_parameters(self):
+        view = CompletedOccurrenceDetailView()
+        request = self.factory.get(
+            "/occurrences/1/",
+            {
+                "response_page": "2",
+                "response_filter_applied": "1",
+                "response_question": ["Side", "Complete?"],
+            },
+        )
+        view.setup(request, pk=1)
+
+        querystring = view._response_page_querystring()
+
+        self.assertNotIn("response_page", querystring)
+        self.assertIn("response_filter_applied=1", querystring)
+        self.assertEqual(querystring.count("response_question="), 2)
+
+    @patch("bones.views.master_detail.build_mni_detail")
+    def test_occurrence_mni_is_deferred_on_initial_page(self, build_mni_detail):
+        view = CompletedOccurrenceDetailView()
+        view.setup(self.factory.get("/occurrences/1260/"), pk=1260)
+        view.object = SimpleNamespace(pk=1260, transect_id=3966264)
+
+        self.assertIsNone(view.get_mni_detail())
+        build_mni_detail.assert_not_called()
+
+    @patch("bones.views.master_detail.build_mni_detail", return_value={"available": True})
+    def test_occurrence_mni_loads_only_when_requested(self, build_mni_detail):
+        view = CompletedOccurrenceDetailView()
+        request = self.factory.get(
+            "/occurrences/1260/", {"load_mni": "1", "response_page": "2"}
+        )
+        view.setup(request, pk=1260)
+        view.object = SimpleNamespace(pk=1260, transect_id=3966264)
+
+        self.assertEqual(view.get_mni_detail(), {"available": True})
+        build_mni_detail.assert_called_once_with(3966264, occurrence_id=1260)
+        self.assertEqual(
+            view.get_mni_load_url(),
+            "?load_mni=1&response_page=2#mni",
+        )
+
+    def test_occurrence_mni_template_offers_deferred_load_action(self):
+        html = render_to_string(
+            "bones/completed_occurrences/_mni.html",
+            {"mni_detail": None, "mni_load_url": "?load_mni=1#mni"},
+        )
+
+        self.assertIn("Load MNI analysis", html)
+        self.assertIn('?load_mni=1#mni', html)
+
+    def test_related_template_renders_response_page_controls(self):
+        page = Paginator(list(range(101)), 100).get_page(1)
+        html = render_to_string(
+            "bones/completed_occurrences/_related.html",
+            {
+                "request": self.factory.get("/occurrences/1/"),
+                "occurrence_response_page": page,
+                "response_page_querystring": "&response_filter_applied=1",
+                "occurrence_instances": [],
+                "response_question_choices": [],
+                "match_question": "",
+                "match_response": "",
+            },
+        )
+
+        self.assertIn("Response page 1 of 2 (101 responses)", html)
+        self.assertIn("response_page=2&amp;response_filter_applied=1#related", html)
+        self.assertIn("Response pagination", html)
     def test_completed_occurrence_related_tab_is_named_instances(self):
         view = CompletedOccurrenceDetailView()
         tabs = list(view.get_tabs())

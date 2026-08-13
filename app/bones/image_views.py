@@ -11,11 +11,12 @@ from django.http import FileResponse, Http404, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views import View
-from PIL import ExifTags, Image, ImageOps
+from PIL import ExifTags, Image
 
 from .image_catalog import write_image_index
 from .image_forms import EntityImageUploadForm
 from .image_imports import canonical_metadata
+from .image_processing import normalization_policy, normalize_image
 from .models import (
     CompletedOccurrence, CompletedTransect, CompletedWorkflow, EntityImage,
     EntityImageTarget,
@@ -103,12 +104,17 @@ def _hierarchy_metadata(entity_type, entity_id):
 
 @transaction.atomic
 def save_image(upload, entity_type, entity_id, user, alt_text="", *, parsed_metadata=None, source_schema="", photo_role="", import_batch=None, targets=None):
-    import hashlib
-    digest = hashlib.sha256()
-    for chunk in upload.chunks() if hasattr(upload, "chunks") else iter(lambda: upload.read(1024 * 1024), b""):
-        digest.update(chunk)
+    source = Image.open(upload)
+    raw_exif = source.getexif()
+    exif = {ExifTags.TAGS.get(key, str(key)): _json_value(value) for key, value in raw_exif.items()}
+    try: gps = raw_exif.get_ifd(ExifTags.IFD.GPSInfo)
+    except (AttributeError, KeyError, TypeError): gps = {}
+    if gps:
+        exif["GPSInfo"] = {ExifTags.GPSTAGS.get(key, str(key)): _json_value(value) for key, value in gps.items()}
+    source.close()
     upload.seek(0)
-    checksum = digest.hexdigest()
+    normalized = normalize_image(upload)
+    checksum = normalized.checksum
     target_specs = targets or [{"entity_type": entity_type, "entity_id": str(entity_id)}]
     existing = EntityImage.objects.filter(entity_type=entity_type, entity_id=str(entity_id), checksum=checksum).first()
     if existing:
@@ -130,20 +136,14 @@ def save_image(upload, entity_type, entity_id, user, alt_text="", *, parsed_meta
         existing._links_created = links_created
         write_image_index()
         return existing
-    source = Image.open(upload)
-    width, height = source.size
-    raw_exif = source.getexif()
-    exif = {ExifTags.TAGS.get(key, str(key)): _json_value(value) for key, value in raw_exif.items()}
-    try: gps = raw_exif.get_ifd(ExifTags.IFD.GPSInfo)
-    except (AttributeError, KeyError, TypeError): gps = {}
-    if gps:
-        exif["GPSInfo"] = {ExifTags.GPSTAGS.get(key, str(key)): _json_value(value) for key, value in gps.items()}
-    upload.seek(0)
     metadata = _hierarchy_metadata(entity_type, entity_id)
     metadata.update(parsed_metadata or {})
-    record = EntityImage(entity_type=entity_type, entity_id=str(entity_id), original_name=upload.name, content_type=getattr(upload, "content_type", "application/octet-stream") or "application/octet-stream", size=upload.size, width=width, height=height, checksum=checksum, exif_metadata=exif, parsed_metadata=metadata, source_schema=source_schema, photo_role=photo_role, alt_text=alt_text, import_batch=import_batch, uploaded_by=user)
-    record.image.save(upload.name, upload, save=False)
-    thumb = ImageOps.exif_transpose(source.copy()); thumb.thumbnail((480, 360))
+    metadata["image_normalization"] = normalization_policy()
+    record = EntityImage(entity_type=entity_type, entity_id=str(entity_id), original_name=upload.name, content_type=normalized.content_type, size=len(normalized.data), width=normalized.width, height=normalized.height, checksum=checksum, exif_metadata=exif, parsed_metadata=metadata, source_schema=source_schema, photo_role=photo_role, alt_text=alt_text, import_batch=import_batch, uploaded_by=user)
+    normalized_name = f"{upload.name.rsplit('.', 1)[0]}{normalized.extension}"
+    record.image.save(normalized_name, ContentFile(normalized.data), save=False)
+    source = Image.open(BytesIO(normalized.data))
+    thumb = source.copy(); thumb.thumbnail((480, 360))
     output = BytesIO(); thumb.save(output, format="WEBP", quality=82)
     record.thumbnail.save("thumbnail.webp", ContentFile(output.getvalue()), save=False)
     record._history_user = user

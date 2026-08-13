@@ -6,9 +6,9 @@ from django.contrib import admin
 from django.test import RequestFactory, SimpleTestCase
 from django.urls import reverse
 from openpyxl import Workbook, load_workbook
-from ..admin_general import (BonesHistoryAdmin, OccurrenceInfoAdmin, ResponseAdmin,
+from ..admin_general import (BonesHistoryAdmin, DataLogAdmin, OccurrenceInfoAdmin, ResponseAdmin,
                              WorkflowAdmin, WorkflowDeletionForm)
-from ..models import CompletedOccurrence, CompletedOccurrenceInfo, CompletedResponse, CompletedTransect, CompletedWorkflow
+from ..models import CompletedOccurrence, CompletedOccurrenceInfo, CompletedResponse, CompletedTransect, CompletedWorkflow, DataLogFile
 from ..occurrence_info_imports import COLUMN_GUIDE, HEADERS, template_workbook, validate_workbook
 
 class GeneralAdminTests(SimpleTestCase):
@@ -19,6 +19,19 @@ class GeneralAdminTests(SimpleTestCase):
     def test_main_operational_models_are_registered(self):
         for model in (CompletedTransect,CompletedOccurrence,CompletedWorkflow,CompletedResponse):
             with self.subTest(model=model.__name__): self.assertIn(model,admin.site._registry)
+
+    @patch("bones.admin_general.ReadOnlyAdmin.get_queryset")
+    def test_data_log_admin_defers_contents(self, get_queryset):
+        base_queryset = MagicMock()
+        get_queryset.return_value = base_queryset
+        request = self.factory.get("/admin/bones/datalogfile/")
+        request.user = self.user
+
+        model_admin = admin.site._registry[DataLogFile]
+        self.assertIsInstance(model_admin, DataLogAdmin)
+        model_admin.get_queryset(request)
+
+        base_queryset.defer.assert_called_once_with("contents")
 
     def test_answers_use_audited_admin(self):
         model_admin=admin.site._registry[CompletedResponse]

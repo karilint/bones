@@ -5,12 +5,15 @@ from typing import Any, Iterable, List, Mapping
 
 from django.contrib import messages
 from django import forms
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
 from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import UpdateView
+from django.views import View
 
 from django_select2.forms import Select2Widget
 
@@ -211,6 +214,18 @@ class DataLogFileDetailView(BonesDetailView):
     list_route_name = "logs:list"
     breadcrumb_list_label = _("Data logs")
 
+    def get_queryset(self):
+        return super().get_queryset().defer("contents")
+
+    def get_extra_actions(self) -> Iterable[Mapping[str, Any]]:
+        return [
+            {
+                "label": _("Download raw payload"),
+                "url": safe_reverse("logs:payload", kwargs={"pk": self.object.pk}),
+                "icon": "fa-solid fa-download",
+            }
+        ]
+
     def get_detail_sections(self) -> Iterable[Mapping[str, Any]]:
         obj = self.object
         return [
@@ -223,15 +238,25 @@ class DataLogFileDetailView(BonesDetailView):
                     {"label": _("Uploaded by"), "value": format_value(obj.uploaded_by)},
                 ],
             },
-            {
-                "title": _("Contents"),
-                "icon": "fa-solid fa-code",
-                "items": [
-                    {"label": _("Payload"), "value": format_pre(obj.contents)},
-                ],
-            },
         ]
 
+
+class DataLogFilePayloadView(BonesAuthMixin, View):
+    """Download a stored log payload without expanding it into an HTML form."""
+
+    permission_required: tuple[str, ...] = ()
+
+    def get(self, request, pk: int, *args, **kwargs):
+        data_log = get_object_or_404(
+            DataLogFile.objects.only("id", "contents"), pk=pk
+        )
+        response = HttpResponse(
+            data_log.contents or "", content_type="text/plain; charset=utf-8"
+        )
+        response["Content-Disposition"] = (
+            f'attachment; filename="data-log-{data_log.pk}.txt"'
+        )
+        return response
 
 class DataTypeDetailView(BonesDetailView):
     """Display and edit reference data type definitions."""

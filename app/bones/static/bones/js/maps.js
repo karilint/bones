@@ -11,6 +11,7 @@
         occurrence: {color: "#283593", fillColor: "#5c6bc0"},
         selected_occurrence: {color: "#4a148c", fillColor: "#ab47bc", radius: 9}
     };
+    const trackColors = ["#1565c0", "#c62828", "#2e7d32", "#6a1b9a", "#ef6c00"];
 
     function popupContent(properties) {
         const wrapper = document.createElement("div");
@@ -69,7 +70,20 @@
         });
     }
     function featureStyle(feature) {
-        return styles[feature.properties.kind] || styles.track;
+        const properties = feature.properties || {};
+        const base = styles[properties.kind] || styles.track;
+        if (properties.kind !== "track" && properties.kind !== "parent_track") return base;
+        const index = Number(properties.track_index) || 0;
+        return Object.assign({}, base, {
+            color: trackColors[index % trackColors.length],
+            dashArray: properties.kind === "parent_track" || index > 0 ? "7 5" : null
+        });
+    }
+
+    function escapeHtml(value) {
+        const element = document.createElement("span");
+        element.textContent = value;
+        return element.innerHTML;
     }
 
     function updateStatus(mapElement, message, error) {
@@ -151,6 +165,18 @@
                     bindHoverPopup(featureLayer);
                 }
             }).addTo(map);
+
+            const deviceLayers = {};
+            layer.eachLayer(function (featureLayer) {
+                const feature = featureLayer.feature || {};
+                const properties = feature.properties || {};
+                if (feature.geometry && feature.geometry.type === "LineString" && properties.device) {
+                    deviceLayers[escapeHtml(properties.device)] = featureLayer;
+                }
+            });
+            if (Object.keys(deviceLayers).length > 1) {
+                window.L.control.layers(null, deviceLayers, {collapsed: false}).addTo(map);
+            }
 
             if (layer.getLayers().length) {
                 const bounds = layer.getBounds();

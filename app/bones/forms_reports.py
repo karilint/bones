@@ -16,7 +16,7 @@ RECONCILIATION_SHEETS = (
 )
 RECONCILIATION_STATUSES = (
     ("MISSING", "Missing"), ("AMBIGUOUS", "Ambiguous"),
-    ("DELETED_CONFIRMED", "Deleted confirmed"), ("HISTORICAL_ONLY", "Historical only"),
+    ("HISTORICAL_ONLY", "Historical only"),
     ("CURRENT_PROBABLE", "Probable match"), ("GPS_MISSING", "GPS missing"),
     ("GPS_PARTIAL", "GPS partial"), ("GPS_OUTSIDE_TIME_RANGE", "GPS outside time range"),
     ("GPS_INVALID_COORDINATES", "GPS invalid coordinates"), ("GPS_HISTORY_ONLY", "GPS history only"),
@@ -31,7 +31,6 @@ RECOVERY_STATUSES = (
     ("REVIEW_REQUIRED", "Review required"),
     ("INSUFFICIENT_LOG_DATA", "Insufficient log data"),
     ("TEMPLATE_NOT_FOUND", "Template not found"),
-    ("INTENTIONALLY_DELETED", "Intentionally deleted"),
 )
 
 
@@ -47,7 +46,9 @@ class DataReconciliationReportForm(forms.Form):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         try:
-            self.fields["logs"].queryset = DataLogFile.objects.order_by("upload_date", "id")
+            self.fields["logs"].queryset = (
+                DataLogFile.objects.defer("contents").order_by("upload_date", "id")
+            )
         except (DatabaseError, ImproperlyConfigured):
             pass
 

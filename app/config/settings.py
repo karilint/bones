@@ -227,6 +227,10 @@ STATIC_ROOT = get_var('STATIC_ROOT', os.path.join(BASE_DIR, 'static'))
 MEDIA_URL = '/media/'
 MEDIA_ROOT = get_var('MEDIA_ROOT', os.path.join(BASE_DIR, 'media'))
 
+# Canonical photographs are bounded and consistently encoded on ingestion.
+BONES_IMAGE_MAX_EDGE = int(get_var('BONES_IMAGE_MAX_EDGE', '3840'))
+BONES_IMAGE_JPEG_QUALITY = int(get_var('BONES_IMAGE_JPEG_QUALITY', '85'))
+
 # Map tiles. Keeping this configurable also leaves a clean extension point for
 # a future Ol Pejeta overlay or a self-hosted tile service.
 MAP_TILE_URL = get_var(
@@ -242,7 +246,7 @@ MAP_TILE_MAX_ZOOM = int(get_var('MAP_TILE_MAX_ZOOM', '17'))
 # Completed spatial records are stable; reuse their generated full-resolution
 # GeoJSON while still allowing deployments to tune or version the cache.
 MAP_DATA_CACHE_TIMEOUT = int(get_var('MAP_DATA_CACHE_TIMEOUT', '3600'))
-MAP_DATA_CACHE_VERSION = int(get_var('MAP_DATA_CACHE_VERSION', '1'))
+MAP_DATA_CACHE_VERSION = int(get_var('MAP_DATA_CACHE_VERSION', '2'))
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.0/ref/settings/#default-auto-field

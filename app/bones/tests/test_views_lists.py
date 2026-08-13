@@ -4,13 +4,42 @@ from unittest.mock import MagicMock, patch
 import django_filters
 from django.test import RequestFactory, SimpleTestCase
 
-from ..models import CompletedOccurrence, CompletedTransect, TemplateTransect
+from ..models import CompletedOccurrence, CompletedTransect, DataLogFile, TemplateTransect
 from ..views.lists import (
     BonesListView,
+    DataLogFileListView,
     CompletedTransectListView,
     CompletedOccurrenceListView,
     TemplateTransectListView,
 )
+
+
+class DataLogFileListViewTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.user = SimpleNamespace(is_authenticated=True, has_perms=lambda perms: True)
+
+    @patch("bones.views.lists.DataLogFileFilterSet")
+    @patch("bones.views.lists.DataLogFile.objects")
+    def test_queryset_defers_contents(self, mock_manager, mock_filterset):
+        request = self.factory.get("/data-logs/")
+        request.user = self.user
+        deferred_qs = MagicMock(name="DeferredQuerySet")
+        ordered_qs = MagicMock(name="OrderedQuerySet")
+        ordered_qs.model = DataLogFile
+        mock_manager.defer.return_value = deferred_qs
+        deferred_qs.order_by.return_value = ordered_qs
+        filter_instance = mock_filterset.return_value
+        filter_instance.form = MagicMock()
+        filter_instance.qs = ordered_qs
+
+        view = DataLogFileListView()
+        view.setup(request)
+        view.filterset_class = mock_filterset
+
+        self.assertIs(view.get_queryset(), ordered_qs)
+        mock_manager.defer.assert_called_once_with("contents")
+        deferred_qs.order_by.assert_called_once_with("-upload_date")
 
 
 class DummyFilterSet(django_filters.FilterSet):

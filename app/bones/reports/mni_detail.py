@@ -10,10 +10,12 @@ from .mni_service import build_report
 
 def build_mni_detail(transect_id, occurrence_id=None, instance_number=None):
     """Calculate a transect once and project it onto a detail-page scope."""
+    rule_rows = list(MNIElementRule.objects.all())
     result, transects, excluded_taxa = build_report(
         {"transects": [transect_id],
          "excluded_taxa": list(DEFAULT_EXCLUDED_TAXA)},
         apply_population_rules=False,
+        element_rule_rows=rule_rows,
     )
     if not transects:
         return empty_mni_detail(
@@ -29,9 +31,7 @@ def build_mni_detail(transect_id, occurrence_id=None, instance_number=None):
             row for row in observations if row.instance_number == instance_number
         ]
 
-    rules = {
-        row.canonical_name.casefold(): row for row in MNIElementRule.objects.all()
-    }
+    rules = {row.canonical_name.casefold(): row for row in rule_rows}
     excluded = {value.casefold() for value in excluded_taxa}
     usable_keys = {
         (row.occurrence_id, row.instance_number, row.taxon, row.element,

@@ -101,8 +101,8 @@ class MapDataViewTests(SimpleTestCase):
         self.factory = RequestFactory()
 
     @staticmethod
-    def _point(pk, lat, lon, when):
-        return SimpleNamespace(pk=pk, lat=lat, long=lon, time=when)
+    def _point(pk, lat, lon, when, user="Device"):
+        return SimpleNamespace(pk=pk, lat=lat, long=lon, time=when, user=user)
 
     @staticmethod
     def _transect(track, occurrences):
@@ -133,8 +133,35 @@ class MapDataViewTests(SimpleTestCase):
             if feature["geometry"]["type"] == "LineString"
         )
         self.assertEqual(line["geometry"]["coordinates"], [[36.7, -0.1], [36.8, -0.2]])
-        self.assertEqual(track.ordering, ("time", "pk"))
+        self.assertEqual(track.ordering, ("user", "time", "pk"))
         self.assertEqual(payload["type"], "FeatureCollection")
+
+    def test_transect_geojson_keeps_device_tracks_separate(self):
+        track = OrderedManager([
+            self._point(1, -0.10, 36.70, "2020-01-01T10:00:00Z", "Briana"),
+            self._point(2, -0.11, 36.71, "2020-01-01T10:00:30Z", "Fire"),
+            self._point(3, -0.20, 36.80, "2020-01-01T10:01:00Z", "Briana"),
+            self._point(4, -0.21, 36.81, "2020-01-01T10:01:30Z", "Fire"),
+        ])
+        transect = self._transect(track, OrderedManager([]))
+        request = self.factory.get("/transects/123/map-data/")
+
+        with patch("bones.map_views.get_object_or_404", return_value=transect):
+            response = TransectMapDataView().get(request, pk=123)
+
+        lines = [
+            feature for feature in json.loads(response.content)["features"]
+            if feature["geometry"]["type"] == "LineString"
+        ]
+        self.assertEqual([line["properties"]["device"] for line in lines], ["Briana", "Fire"])
+        self.assertEqual(lines[0]["geometry"]["coordinates"], [[36.7, -0.1], [36.8, -0.2]])
+        self.assertEqual(lines[1]["geometry"]["coordinates"], [[36.71, -0.11], [36.81, -0.21]])
+
+    def test_map_script_styles_and_toggles_device_tracks(self):
+        script = (Path(__file__).resolve().parents[1] / "static" / "bones" / "js" / "maps.js").read_text(encoding="utf-8")
+        self.assertIn("trackColors", script)
+        self.assertIn("properties.track_index", script)
+        self.assertIn("control.layers(null, deviceLayers", script)
 
     def test_occurrence_map_marks_selected_occurrence(self):
         selected = SimpleNamespace(pk=7, occurrence_number=2, lat=-0.15, long=36.75)

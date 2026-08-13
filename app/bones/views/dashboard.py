@@ -160,7 +160,7 @@ class DashboardView(BonesAuthMixin, TemplateView):
 
         try:
             transects = list(
-                CompletedTransect.objects.for_dashboard()
+                CompletedTransect.objects.only("uid", "name", "start_time", "state")
                 .order_by("-start_time")[:limit]
             )
         except (DatabaseError, ImproperlyConfigured):
@@ -186,7 +186,11 @@ class DashboardView(BonesAuthMixin, TemplateView):
 
         try:
             occurrences = list(
-                CompletedOccurrence.objects.with_related_data()
+                CompletedOccurrence.objects.select_related("transect")
+                .only(
+                    "id", "occurrence_number", "state", "recording_start_time",
+                    "transect__uid", "transect__name",
+                )
                 .order_by("-recording_start_time")[:limit]
             )
         except (DatabaseError, ImproperlyConfigured):

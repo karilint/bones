@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from collections import defaultdict
 from typing import Any
 
 from django.conf import settings
@@ -30,19 +31,29 @@ def _feature_collection(features: list[dict[str, Any] | None]) -> dict[str, Any]
     }
 
 
-def _track_feature(transect: CompletedTransect, *, kind: str = "track"):
-    coordinates = [
-        coordinate
-        for latitude, longitude in transect.track_points.order_by("time", "pk").values_list(
-            "lat", "long"
-        )
-        if (coordinate := valid_coordinate(latitude, longitude)) is not None
-    ]
-    return line_feature(
-        coordinates,
-        kind=kind,
-        label=_("Transect {transect}").format(transect=transect),
+def _track_features(transect: CompletedTransect, *, kind: str = "track"):
+    """Build one line per recording device instead of interleaving tracks."""
+    grouped = defaultdict(list)
+    rows = transect.track_points.order_by("user", "time", "pk").values_list(
+        "user", "lat", "long"
     )
+    for user, latitude, longitude in rows:
+        coordinate = valid_coordinate(latitude, longitude)
+        if coordinate is not None:
+            grouped[(user or "").strip()].append(coordinate)
+    features = []
+    for track_index, (user, coordinates) in enumerate(sorted(grouped.items())):
+        device = user or _("Unknown device")
+        features.append(line_feature(
+            coordinates,
+            kind=kind,
+            label=_("Transect {transect} — {device}").format(
+                transect=transect, device=device,
+            ),
+            device=device,
+            track_index=track_index,
+        ))
+    return features
 
 
 def _landmark_features(transect: CompletedTransect) -> list[dict[str, Any] | None]:
@@ -83,7 +94,7 @@ def _occurrence_feature(
 
 def build_transect_map_data(transect: CompletedTransect) -> dict[str, Any]:
     """Build full-resolution GeoJSON with narrow coordinate-only relation queries."""
-    features: list[dict[str, Any] | None] = [_track_feature(transect)]
+    features: list[dict[str, Any] | None] = _track_features(transect)
     features.extend(_landmark_features(transect))
     features.extend(
         _occurrence_feature(pk, number, latitude, longitude)

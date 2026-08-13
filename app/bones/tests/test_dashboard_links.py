@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any, Iterable
 
-from django.test import TestCase
+from django.test import SimpleTestCase
 from django.urls import reverse
 from django.utils import timezone
 from unittest.mock import patch
@@ -16,6 +16,9 @@ class _SliceableList(list):
     """List-like helper that supports ``order_by``/``values`` chains in tests."""
 
     def order_by(self, *args: Any, **kwargs: Any) -> "_SliceableList":  # pragma: no cover - simple passthrough
+        return self
+
+    def only(self, *args: Any, **kwargs: Any) -> "_SliceableList":  # pragma: no cover - simple passthrough
         return self
 
 
@@ -43,7 +46,7 @@ class _OrderByStub:
         )
 
 
-class DashboardLinkTests(TestCase):
+class DashboardLinkTests(SimpleTestCase):
     def setUp(self) -> None:
         self.view = DashboardView()
 
@@ -71,7 +74,7 @@ class DashboardLinkTests(TestCase):
         )
         queryset = _SliceableList([transect])
 
-        with patch.object(CompletedTransect.objects, "for_dashboard", return_value=queryset):
+        with patch.object(CompletedTransect.objects, "only", return_value=queryset):
             results = self.view._fetch_recent_transects()
 
         self.assertEqual(
@@ -90,7 +93,7 @@ class DashboardLinkTests(TestCase):
 
         with patch.object(
             CompletedOccurrence.objects,
-            "with_related_data",
+            "select_related",
             return_value=queryset,
         ):
             results = self.view._fetch_recent_occurrences()

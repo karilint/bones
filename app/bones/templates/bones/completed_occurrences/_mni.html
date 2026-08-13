@@ -1,1 +1,15 @@
-{% load i18n %}{% trans "MNI contribution" as heading %}{% trans "This occurrence's evidence is shown within the parent transect calculation." as intro %}{% include "bones/partials/mni_detail.html" with mni_heading=heading mni_intro=intro %}
+{% load i18n %}
+{% if mni_detail %}
+    {% trans "MNI contribution" as heading %}
+    {% trans "This occurrence's evidence is shown within the parent transect calculation." as intro %}
+    {% include "bones/partials/mni_detail.html" with mni_heading=heading mni_intro=intro %}
+{% else %}
+    <section class="w3-section w3-card w3-padding" aria-labelledby="mni-load-heading">
+        <h3 id="mni-load-heading" class="w3-large">{% trans "MNI contribution" %}</h3>
+        <p>{% trans "MNI is calculated across the parent transect and is loaded only when requested." %}</p>
+        <a class="w3-button w3-blue w3-round" href="{{ mni_load_url }}">
+            <span class="fa-solid fa-calculator" aria-hidden="true"></span>
+            {% trans "Load MNI analysis" %}
+        </a>
+    </section>
+{% endif %}

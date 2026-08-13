@@ -3,6 +3,7 @@ from .instance import CompletedInstanceDetailView
 from .dashboard import DashboardView
 from .detail import (
     DataLogFileDetailView,
+    DataLogFilePayloadView,
     DataTypeDetailView,
     ProjectConfigDetailView,
     QuestionDetailView,
@@ -56,6 +57,7 @@ __all__ = [
     "ProjectConfigListView",
     "DataLogFileListView",
     "DataLogFileDetailView",
+    "DataLogFilePayloadView",
     "DataTypeDetailView",
     "ProjectConfigDetailView",
     "QuestionDetailView",

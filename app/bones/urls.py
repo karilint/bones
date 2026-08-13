@@ -25,6 +25,7 @@ from .views import (
     CompletedWorkflowListView,
     DashboardView,
     DataLogFileDetailView,
+    DataLogFilePayloadView,
     DataLogFileListView,
     DataReconciliationReportView,
     DataTypeDetailView,
@@ -100,6 +101,7 @@ reference_patterns = (
 log_patterns = (
     [
         path("", DataLogFileListView.as_view(), name="list"),
+        path("<int:pk>/payload/", DataLogFilePayloadView.as_view(), name="payload"),
         path("<int:pk>/", DataLogFileDetailView.as_view(), name="detail"),
     ],
     "logs",

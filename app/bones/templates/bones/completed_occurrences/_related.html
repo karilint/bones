@@ -44,6 +44,31 @@
             </form>
         </section>
 {% endif %}
+{% if occurrence_response_page.paginator.count %}
+    <nav class="w3-margin-top w3-margin-bottom" aria-label="{% trans 'Response pagination' %}">
+        <p class="w3-small w3-text-grey">
+            {% blocktrans trimmed with page=occurrence_response_page.number pages=occurrence_response_page.paginator.num_pages total=occurrence_response_page.paginator.count %}
+                Response page {{ page }} of {{ pages }} ({{ total }} responses)
+            {% endblocktrans %}
+        </p>
+        {% if occurrence_response_page.paginator.num_pages > 1 %}
+            <div class="w3-bar w3-border w3-round w3-white">
+                {% if occurrence_response_page.has_previous %}
+                    <a class="w3-bar-item w3-button" href="?response_page={{ occurrence_response_page.previous_page_number }}{{ response_page_querystring }}#related">
+                        <span class="fa-solid fa-chevron-left" aria-hidden="true"></span>
+                        {% trans "Previous responses" %}
+                    </a>
+                {% endif %}
+                {% if occurrence_response_page.has_next %}
+                    <a class="w3-bar-item w3-button" href="?response_page={{ occurrence_response_page.next_page_number }}{{ response_page_querystring }}#related">
+                        {% trans "Next responses" %}
+                        <span class="fa-solid fa-chevron-right" aria-hidden="true"></span>
+                    </a>
+                {% endif %}
+            </div>
+        {% endif %}
+    </nav>
+{% endif %}
 {% if occurrence_instances %}
     {% for instance in occurrence_instances %}
         <section class="w3-section">

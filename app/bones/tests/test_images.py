@@ -15,6 +15,7 @@ from PIL import Image
 from ..admin import BulkForm
 from ..image_forms import EntityImageUploadForm
 from ..image_imports import norm, parse_filename, resolve_filename
+from ..image_processing import normalize_image
 from ..image_views import ImageDeleteView
 from ..models import (
     CompletedOccurrenceInfo, CompletedResponse, CompletedTransectInfo,
@@ -25,6 +26,30 @@ from ..models.images import entity_image_path, remove_empty_image_directories, s
 
 
 class EntityImageTests(SimpleTestCase):
+    def test_image_normalization_bounds_dimensions_and_returns_jpeg(self):
+        content = BytesIO()
+        Image.new("RGB", (5000, 2500), "blue").save(content, "JPEG", quality=95)
+        content.seek(0)
+
+        normalized = normalize_image(content)
+
+        self.assertEqual((normalized.width, normalized.height), (3840, 1920))
+        self.assertEqual(normalized.content_type, "image/jpeg")
+        self.assertEqual(normalized.extension, ".jpg")
+        self.assertEqual(len(normalized.checksum), 64)
+        with Image.open(BytesIO(normalized.data)) as image:
+            self.assertEqual(image.format, "JPEG")
+
+    def test_image_normalization_flattens_transparency(self):
+        content = BytesIO()
+        Image.new("RGBA", (20, 10), (255, 0, 0, 0)).save(content, "PNG")
+        content.seek(0)
+
+        normalized = normalize_image(content)
+
+        with Image.open(BytesIO(normalized.data)) as image:
+            self.assertEqual(image.mode, "RGB")
+
     def test_admin_bulk_form_accepts_five_images(self):
         uploads = []
         for index in range(5):
@@ -87,6 +112,33 @@ class EntityImageTests(SimpleTestCase):
         self.assertEqual(metadata["transect_uid"], 4478950)
         self.assertEqual(metadata["occurrence_number"], 18)
         self.assertEqual(metadata["instance_numbers"], [1, 2, 3, 4])
+
+    def test_instance_photo_variants_resolve_to_the_same_instance(self):
+        for filename, variant in (
+            ("97_3967792_1_2_a.JPG", "a"),
+            ("97_3967792_1_2_b.JPG", "b"),
+            ("97_3967792_2_1_c.JPG", "c"),
+        ):
+            with self.subTest(filename=filename):
+                schema, metadata = parse_filename(filename)
+                self.assertEqual(schema, "full_hierarchy")
+                self.assertEqual(metadata["transect_uid"], 3967792)
+                self.assertEqual(
+                    metadata["instance_number"], int(filename.split("_")[3])
+                )
+                self.assertEqual(metadata["photo_variant"], variant)
+
+    def test_begin_labels_are_transect_start_photos(self):
+        for filename in ("97_3967792_Begin.JPG", "97_3967792_0Begin.JPG"):
+            with self.subTest(filename=filename):
+                schema, metadata = parse_filename(filename)
+                self.assertEqual(schema, "transect_location")
+                self.assertEqual(metadata["photo_role"], "start")
+
+    def test_numeric_turn_label_is_a_transect_turn_photo(self):
+        schema, metadata = parse_filename("97_3967792_3Turn.JPG")
+        self.assertEqual(schema, "transect_location")
+        self.assertEqual(metadata["photo_role"], "turn")
 
     def test_large_instance_range_does_not_imply_file_copies(self):
         schema, metadata = parse_filename("105_4478950_18_1-90.JPG")

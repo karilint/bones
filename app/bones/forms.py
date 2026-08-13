@@ -285,11 +285,11 @@ class ProjectConfigForm(forms.ModelForm):
 
 
 class DataLogFileForm(forms.ModelForm):
-    """ModelForm for uploaded data log files."""
+    """Edit log metadata without loading or reposting the stored payload."""
 
     class Meta:
         model = DataLogFile
-        fields = ["upload_date", "uploaded_by", "contents"]
+        fields = ["upload_date", "uploaded_by"]
         widgets = {
             "upload_date": forms.DateTimeInput(attrs={"type": "datetime-local"}),
         }

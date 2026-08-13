@@ -1,6 +1,7 @@
 """Completed entity models and query utilities."""
 from django.db import models
-from django.db.models import Count, Prefetch
+from django.db.models import Count, IntegerField, OuterRef, Prefetch, Subquery, Value
+from django.db.models.functions import Coalesce
 from simple_history.models import HistoricalRecords
 
 
@@ -60,6 +61,29 @@ class CompletedOccurrenceQuerySet(models.QuerySet):
     def with_response_counts(self):
         """Annotate the number of responses captured for each occurrence."""
         return self.annotate(response_count=Count("responses"))
+
+    def with_related_counts(self):
+        """Annotate response and workflow totals without multiplying joins."""
+        response_counts = (
+            CompletedResponse.objects.filter(occurrence_id=OuterRef("pk"))
+            .values("occurrence_id")
+            .annotate(total=Count("pk"))
+            .values("total")
+        )
+        workflow_counts = (
+            CompletedWorkflow.objects.filter(occurrence_id=OuterRef("pk"))
+            .values("occurrence_id")
+            .annotate(total=Count("pk"))
+            .values("total")
+        )
+        return self.annotate(
+            response_count=Coalesce(
+                Subquery(response_counts, output_field=IntegerField()), Value(0)
+            ),
+            workflow_count=Coalesce(
+                Subquery(workflow_counts, output_field=IntegerField()), Value(0)
+            ),
+        )
 
     def with_related_data(self):
         """Bundle common prefetch chains for list/detail screens."""

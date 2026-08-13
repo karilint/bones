@@ -132,7 +132,7 @@ def _parse_line_log(log_id: int, contents: str) -> ParsedLog | None:
             occurrence = None
         elif command == "STARTOCCURRENCE" and transect and len(parts) >= 2:
             lat, long = _coordinates(parts[2] if len(parts) >= 3 else None)
-            occurrence = {"log_id": log_id, "source": f"line {position}", "transect_uid": transect["uid"], "id": None, "number": _integer(parts[1]), "start_time": _datetime(" ".join(parts[3:5])) if len(parts) >= 5 else None, "end_time": None, "state": "started", "lat": lat, "long": long, "user": None}
+            occurrence = {"log_id": log_id, "source": f"line {position}", "transect_uid": transect["uid"], "id": None, "number": _integer(parts[1]), "start_time": _datetime(" ".join(parts[3:5])) if len(parts) >= 5 else None, "end_time": None, "state": "started", "lat": lat, "long": long, "user": None, "evidence_count": 0, "parent_transect": transect}
             result.occurrences.append(occurrence)
             workflow = None
         elif command == "/STARTOCCURRENCE" and occurrence:
@@ -144,10 +144,13 @@ def _parse_line_log(log_id: int, contents: str) -> ParsedLog | None:
             occurrence["state"] = "completed"
             occurrence["end_time"] = _datetime(" ".join(parts[1:3]))
         elif command == "STARTWORKFLOW" and occurrence and len(parts) >= 4:
-            workflow = {"log_id": log_id, "source": f"line {position}", "transect_uid": transect["uid"], "occurrence_id": None, "occurrence_number": occurrence["number"], "number": _integer(parts[3]), "workflow_uid": parts[2], "template": parts[1], "parent_occurrence": occurrence, "state": "started", "response_count": 0}
+            workflow = {"log_id": log_id, "source": f"line {position}", "transect_uid": transect["uid"], "occurrence_id": None, "occurrence_number": occurrence["number"], "number": _integer(parts[3]), "workflow_uid": parts[2], "template": parts[1], "parent_transect": transect, "parent_occurrence": occurrence, "state": "started", "response_count": 0}
             result.instances.append(workflow)
         elif command == "ENDWORKFLOW" and workflow:
             workflow["state"] = "completed"
+            workflow = None
+        elif command == "QUESTION" and occurrence and not workflow:
+            occurrence["evidence_count"] += 1
         elif command in {"RESPONSE", "SKIPPEDRESPONSE"} and workflow:
             workflow["response_count"] += 1
         elif command in {"CHECKPOINT", "TURNAROUND", "PAUSETRANSECT", "RESUMETRANSECT"} and transect:

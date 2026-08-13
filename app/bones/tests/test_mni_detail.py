@@ -39,6 +39,7 @@ class MNIDetailPresentationTests(SimpleTestCase):
         build_report.assert_called_once_with(
             {"transects": [10], "excluded_taxa": list(DEFAULT_EXCLUDED_TAXA)},
             apply_population_rules=False,
+            element_rule_rows=rule_objects.all.return_value,
         )
         self.assertEqual(detail["total_mni"], 1)
         self.assertEqual(detail["contributing_instance_count"], 1)
