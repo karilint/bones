@@ -41,7 +41,11 @@ from .master_detail import (
     CompletedOccurrenceDetailView,
     CompletedTransectDetailView,
 )
-from .reports import DataReconciliationReportView, MNIAnalysisExportView, MNISummaryView
+from .reports import (BoneDistributionReportView, CarnivoreReportView,
+                      DataReconciliationReportView,
+                      MNIAnalysisExportView, MNISummaryView,
+                      TeethDistributionReportView,
+                      TransectDetectionReportView, WeatheringReportView)
 
 __all__ = [
     "DashboardView",
@@ -79,5 +83,10 @@ __all__ = [
     "QuestionHistoryEntryView",
     "MNISummaryView",
     "MNIAnalysisExportView",
+    "WeatheringReportView",
+    "CarnivoreReportView",
+    "BoneDistributionReportView",
+    "TeethDistributionReportView",
+    "TransectDetectionReportView",
     "DataReconciliationReportView",
 ]

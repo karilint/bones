@@ -23,6 +23,10 @@ from .views import (
     CompletedWorkflowHistoryListView,
     CompletedWorkflowHistoryRecordView,
     CompletedWorkflowListView,
+    CarnivoreReportView,
+    BoneDistributionReportView,
+    TeethDistributionReportView,
+    TransectDetectionReportView,
     DashboardView,
     DataLogFileDetailView,
     DataLogFilePayloadView,
@@ -37,6 +41,7 @@ from .views import (
     HistoryIndexView,
     MNISummaryView,
     MNIAnalysisExportView,
+    WeatheringReportView,
     ProjectConfigDetailView,
     ProjectConfigListView,
     QuestionDetailView,
@@ -171,6 +176,11 @@ history_patterns = (
 
 report_patterns = ([
     path("mni/", MNISummaryView.as_view(), name="mni"),
+    path("weathering/", WeatheringReportView.as_view(), name="weathering"),
+    path("carnivore-damage/", CarnivoreReportView.as_view(), name="carnivore"),
+    path("bone-distribution/", BoneDistributionReportView.as_view(), name="bone_distribution"),
+    path("teeth-distribution/", TeethDistributionReportView.as_view(), name="teeth_distribution"),
+    path("transect-detection/", TransectDetectionReportView.as_view(), name="transect_detection"),
     path("mni-analysis/", MNIAnalysisExportView.as_view(), name="mni_analysis"),
     path("data-reconciliation/", DataReconciliationReportView.as_view(), name="data_reconciliation"),
 ], "reports")

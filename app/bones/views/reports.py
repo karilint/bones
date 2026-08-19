@@ -14,11 +14,30 @@ from openpyxl.styles import Font
 from openpyxl.utils import get_column_letter
 
 from ..filters import CompletedTransectFilterSet
-from ..forms_reports import BoneCensusExportForm, DataReconciliationReportForm, MNIReportForm
+from ..forms_reports import (BoneCensusExportForm, BoneDistributionReportForm,
+                             CarnivoreReportForm,
+                             DataReconciliationReportForm, MNIReportForm,
+                             TeethDistributionReportForm,
+                             TransectDetectionReportForm, WeatheringReportForm)
 from ..management.commands.reconcile_data_logs import collect_reconciliation_rows, filter_reconciliation_rows
 from ..models import CompletedTransect
 from ..reports.data_log_reconciliation import workbook_bytes
 from ..reports.mni_service import build_report
+from ..reports.carnivore import (CALCULATION_RULES as CARNIVORE_RULES,
+                                 build_carnivore_report)
+from ..reports.bone_distribution import (
+    CALCULATION_RULES as BONE_DISTRIBUTION_RULES,
+    build_bone_distribution_report,
+)
+from ..reports.teeth_distribution import (
+    CALCULATION_RULES as TEETH_DISTRIBUTION_RULES,
+    build_teeth_distribution_report,
+)
+from ..reports.transect_detection import (
+    CALCULATION_RULES as TRANSECT_DETECTION_RULES,
+    build_transect_detection_report,
+)
+from ..reports.weathering import CALCULATION_RULES, build_weathering_report
 from .mixins import BonesAuthMixin
 
 
@@ -67,6 +86,234 @@ def export_workbook(result, filters, methodology, transect_names=None):
     for line in methodology:
         notes.append([line])
     notes.append(["Applied filters", filters])
+    output = BytesIO()
+    workbook.save(output)
+    return output.getvalue()
+
+
+def export_weathering_workbook(result, filter_summary, calculation_rules):
+    """Return the displayed weathering matrix and its exact rules as Excel."""
+    workbook = Workbook()
+    summary = workbook.active
+    summary.title = "Weathering"
+    summary.append(["Measure", *result.habitats])
+    for cell in summary[1]:
+        cell.font = Font(bold=True)
+    for report_row in result.rows:
+        summary.append([report_row["label"], *report_row["values"]])
+        row_number = summary.max_row
+        number_format = "0" if report_row["kind"] == "integer" else "0.00"
+        for cell in summary[row_number][1:]:
+            cell.number_format = number_format
+    summary.freeze_panes = "B2"
+    summary.column_dimensions["A"].width = 38
+    for index in range(2, summary.max_column + 1):
+        summary.column_dimensions[get_column_letter(index)].width = 18
+
+    rules = workbook.create_sheet("Calculation rules")
+    rules.append(["Weathering report calculation rules"])
+    rules["A1"].font = Font(bold=True)
+    for number, rule in enumerate(calculation_rules, start=1):
+        rules.append([number, rule])
+    rules.append([])
+    rules.append(["Applied filters", filter_summary])
+    rules.column_dimensions["A"].width = 18
+    rules.column_dimensions["B"].width = 120
+
+    warnings = workbook.create_sheet("Data quality")
+    warnings.append(["Warning"])
+    warnings["A1"].font = Font(bold=True)
+    if result.warnings:
+        for warning in result.warnings:
+            warnings.append([warning])
+    else:
+        warnings.append(["No weathering-stage warnings."])
+    warnings.column_dimensions["A"].width = 120
+    output = BytesIO()
+    workbook.save(output)
+    return output.getvalue()
+
+
+def export_carnivore_workbook(result, filter_summary, calculation_rules):
+    """Return the displayed carnivore matrix and its exact rules as Excel."""
+    workbook = Workbook()
+    summary = workbook.active
+    summary.title = "Carnivore damage"
+    summary.append(["Measure", *result.habitats])
+    for cell in summary[1]:
+        cell.font = Font(bold=True)
+    for report_row in result.rows:
+        summary.append([report_row["label"], *report_row["values"]])
+        number_format = "0" if report_row["kind"] == "integer" else "0.00"
+        for cell in summary[summary.max_row][1:]:
+            cell.number_format = number_format
+    summary.freeze_panes = "B2"
+    summary.column_dimensions["A"].width = 28
+    for index in range(2, summary.max_column + 1):
+        summary.column_dimensions[get_column_letter(index)].width = 18
+
+    specimens = workbook.create_sheet("Specimen preservation")
+    specimens.append(result.specimen_headers)
+    for cell in specimens[1]:
+        cell.font = Font(bold=True)
+    for row in result.specimen_rows:
+        specimens.append(row)
+    specimens.freeze_panes = "A2"
+    specimens.auto_filter.ref = specimens.dimensions
+    for column in specimens.columns:
+        specimens.column_dimensions[get_column_letter(column[0].column)].width = 22
+
+    damage_detail = workbook.create_sheet("Damage observations")
+    damage_detail.append(result.damage_headers)
+    for cell in damage_detail[1]:
+        cell.font = Font(bold=True)
+    for row in result.damage_rows:
+        damage_detail.append(row)
+    damage_detail.freeze_panes = "A2"
+    damage_detail.auto_filter.ref = damage_detail.dimensions
+    for column in damage_detail.columns:
+        damage_detail.column_dimensions[get_column_letter(column[0].column)].width = 20
+
+    rules = workbook.create_sheet("Calculation rules")
+    rules.append(["Carnivore damage report calculation rules"])
+    rules["A1"].font = Font(bold=True)
+    for number, rule in enumerate(calculation_rules, start=1):
+        rules.append([number, rule])
+    rules.append([])
+    rules.append(["Applied filters", filter_summary])
+    rules.column_dimensions["A"].width = 18
+    rules.column_dimensions["B"].width = 120
+
+    warnings = workbook.create_sheet("Data quality")
+    warnings.append(["Warning"])
+    warnings["A1"].font = Font(bold=True)
+    for warning in result.warnings or ["No carnivore-damage warnings."]:
+        warnings.append([warning])
+    warnings.column_dimensions["A"].width = 120
+    output = BytesIO()
+    workbook.save(output)
+    return output.getvalue()
+
+
+def export_bone_distribution_workbook(result, filter_summary, calculation_rules):
+    """Return the grouped element matrix and exact rules as Excel."""
+    workbook = Workbook()
+    summary = workbook.active
+    summary.title = "Bone distribution"
+    summary.append(["Element", *result.habitats])
+    for cell in summary[1]:
+        cell.font = Font(bold=True)
+    for report_row in result.rows:
+        if report_row["kind"] == "subheader":
+            summary.append([report_row["label"]])
+            row_number = summary.max_row
+            summary.merge_cells(
+                start_row=row_number, start_column=1,
+                end_row=row_number, end_column=summary.max_column,
+            )
+            summary.cell(row_number, 1).font = Font(bold=True)
+            continue
+        summary.append([report_row["label"], *report_row["values"]])
+        number_format = "0" if report_row["kind"] == "count" else "0.00"
+        for cell in summary[summary.max_row][1:]:
+            cell.number_format = number_format
+    summary.freeze_panes = "B2"
+    summary.column_dimensions["A"].width = 38
+    for index in range(2, summary.max_column + 1):
+        summary.column_dimensions[get_column_letter(index)].width = 18
+
+    rules = workbook.create_sheet("Calculation rules")
+    rules.append(["Bone distribution report calculation rules"])
+    rules["A1"].font = Font(bold=True)
+    for number, rule in enumerate(calculation_rules, start=1):
+        rules.append([number, rule])
+    rules.append([])
+    rules.append(["Applied filters", filter_summary])
+    rules.column_dimensions["A"].width = 18
+    rules.column_dimensions["B"].width = 120
+    warnings = workbook.create_sheet("Data quality")
+    warnings.append(["Warning"])
+    warnings["A1"].font = Font(bold=True)
+    for warning in result.warnings or ["No bone-distribution warnings."]:
+        warnings.append([warning])
+    warnings.column_dimensions["A"].width = 120
+    output = BytesIO()
+    workbook.save(output)
+    return output.getvalue()
+
+
+def export_teeth_distribution_workbook(result, filter_summary, calculation_rules):
+    workbook = Workbook()
+    summary = workbook.active
+    summary.title = "Teeth distribution"
+    summary.append(["Tooth type", *result.habitats])
+    for cell in summary[1]:
+        cell.font = Font(bold=True)
+    for report_row in result.rows:
+        summary.append([report_row["label"], *report_row["values"]])
+        number_format = "0" if report_row["kind"] == "count" else "0.00"
+        for cell in summary[summary.max_row][1:]:
+            cell.number_format = number_format
+    summary.freeze_panes = "B2"
+    summary.column_dimensions["A"].width = 28
+    for index in range(2, summary.max_column + 1):
+        summary.column_dimensions[get_column_letter(index)].width = 18
+    rules = workbook.create_sheet("Calculation rules")
+    rules.append(["Teeth distribution report calculation rules"])
+    rules["A1"].font = Font(bold=True)
+    for number, rule in enumerate(calculation_rules, start=1):
+        rules.append([number, rule])
+    rules.append([])
+    rules.append(["Applied filters", filter_summary])
+    rules.column_dimensions["A"].width = 18
+    rules.column_dimensions["B"].width = 120
+    warnings = workbook.create_sheet("Data quality")
+    warnings.append(["Warning"])
+    warnings["A1"].font = Font(bold=True)
+    for warning in result.warnings or ["No teeth-distribution warnings."]:
+        warnings.append([warning])
+    warnings.column_dimensions["A"].width = 120
+    output = BytesIO()
+    workbook.save(output)
+    return output.getvalue()
+
+
+def export_transect_detection_workbook(result, filter_summary, calculation_rules):
+    def excel_value(value):
+        if hasattr(value, "tzinfo") and timezone.is_aware(value):
+            return timezone.localtime(value).replace(tzinfo=None)
+        return value
+
+    workbook = Workbook()
+    transects = workbook.active
+    transects.title = "Transect summary"
+    transects.append(result.transect_headers)
+    for cell in transects[1]:
+        cell.font = Font(bold=True)
+    for row in result.transect_rows:
+        transects.append([excel_value(value) for value in row])
+    transects.freeze_panes = "A2"
+    transects.auto_filter.ref = transects.dimensions
+    occurrences = workbook.create_sheet("Occurrence detection")
+    occurrences.append(result.occurrence_headers)
+    for cell in occurrences[1]:
+        cell.font = Font(bold=True)
+    for row in result.occurrence_rows:
+        occurrences.append([excel_value(value) for value in row])
+    occurrences.freeze_panes = "A2"
+    occurrences.auto_filter.ref = occurrences.dimensions
+    for sheet in (transects, occurrences):
+        for column in range(1, sheet.max_column + 1):
+            sheet.column_dimensions[get_column_letter(column)].width = 20
+    rules = workbook.create_sheet("Calculation rules")
+    rules.append(["Transect detection report calculation rules"])
+    rules["A1"].font = Font(bold=True)
+    for number, rule in enumerate(calculation_rules, start=1):
+        rules.append([number, rule])
+    rules.append([])
+    rules.append(["Applied filters", filter_summary])
+    rules.column_dimensions["A"].width = 18
+    rules.column_dimensions["B"].width = 120
     output = BytesIO()
     workbook.save(output)
     return output.getvalue()
@@ -329,6 +576,287 @@ class MNISummaryView(BonesAuthMixin, TemplateView):
                 context.update({"result": result, "report_transects": transects, "filter_summary": summary})
             except (DatabaseError, ImproperlyConfigured):
                 context["report_error"] = "The report database is temporarily unavailable. Please try again later."
+        return context
+
+
+class WeatheringReportView(BonesAuthMixin, TemplateView):
+    template_name = "bones/reports/weathering.html"
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data(**kwargs)
+        if context.get("result") and request.GET.get("export") == "xlsx":
+            payload = export_weathering_workbook(
+                context["result"], context["filter_summary"],
+                context["calculation_rules"],
+            )
+            response = HttpResponse(
+                payload,
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+            response["Content-Disposition"] = 'attachment; filename="weathering-report.xlsx"'
+            return response
+        return self.render_to_response(context)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        has_filters = any(key != "export" for key in self.request.GET)
+        if has_filters:
+            data = self.request.GET
+        else:
+            defaults = WeatheringReportForm()
+            data = self.request.GET.copy()
+            data.setlist(
+                "excluded_taxa", defaults.initial.get("excluded_taxa", [])
+            )
+        form = WeatheringReportForm(data=data)
+        note_filter = CompletedTransectFilterSet(
+            data=data, queryset=CompletedTransect.objects.none()
+        )
+        context.update({
+            "page_title": "Weathering report", "form": form,
+            "note_filter": note_filter, "result": None, "report_error": "",
+            "calculation_rules": CALCULATION_RULES,
+            "export_query": self.request.GET.urlencode()
+            + ("&" if self.request.GET else "") + "export=xlsx",
+        })
+        if not form.is_valid():
+            return context
+        try:
+            result = build_weathering_report(
+                form.cleaned_data, note_filter.note_filters
+            )
+            selected = form.cleaned_data
+            parts = [f'{result.rows[0]["values"][-1]} eligible transects']
+            parts.append("years: " + (", ".join(selected.get("years", [])) or "all eligible"))
+            parts.append("habitats: " + (", ".join(selected.get("habitats", [])) or "all"))
+            parts.append("old reserve: " + (selected.get("reserve") or "both"))
+            parts.append(
+                "excluded taxa: "
+                + (", ".join(selected.get("excluded_taxa", [])) or "none")
+            )
+            if note_filter.note_filters:
+                notes = [
+                    f'{row.get("phase")}/{row.get("question")}: '
+                    f'{", ".join(row.get("responses", [])) or "any response"}'
+                    for row in note_filter.note_filters
+                ]
+                parts.append("transect notes: " + "; ".join(notes))
+            context.update({
+                "result": result, "filter_summary": "; ".join(parts)
+            })
+        except (DatabaseError, ImproperlyConfigured):
+            context["report_error"] = (
+                "The report database is temporarily unavailable. Please try again later."
+            )
+        return context
+
+
+class CarnivoreReportView(BonesAuthMixin, TemplateView):
+    template_name = "bones/reports/carnivore.html"
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data(**kwargs)
+        if context.get("result") and request.GET.get("export") == "xlsx":
+            payload = export_carnivore_workbook(
+                context["result"], context["filter_summary"],
+                context["calculation_rules"],
+            )
+            response = HttpResponse(
+                payload,
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+            response["Content-Disposition"] = 'attachment; filename="carnivore-damage-report.xlsx"'
+            return response
+        return self.render_to_response(context)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        form = CarnivoreReportForm(data=self.request.GET)
+        note_filter = CompletedTransectFilterSet(
+            data=self.request.GET, queryset=CompletedTransect.objects.none()
+        )
+        context.update({
+            "page_title": "Carnivore damage report", "form": form,
+            "note_filter": note_filter, "result": None, "report_error": "",
+            "calculation_rules": CARNIVORE_RULES,
+            "export_query": self.request.GET.urlencode()
+            + ("&" if self.request.GET else "") + "export=xlsx",
+        })
+        if not form.is_valid():
+            return context
+        try:
+            result = build_carnivore_report(
+                form.cleaned_data, note_filter.note_filters
+            )
+            selected = form.cleaned_data
+            parts = [
+                "years: " + (", ".join(selected.get("years", [])) or "all eligible"),
+                "habitats: " + (", ".join(selected.get("habitats", [])) or "all"),
+                "old reserve: " + (selected.get("reserve") or "both"),
+            ]
+            if note_filter.note_filters:
+                notes = [
+                    f'{row.get("phase")}/{row.get("question")}: '
+                    f'{", ".join(row.get("responses", [])) or "any response"}'
+                    for row in note_filter.note_filters
+                ]
+                parts.append("transect notes: " + "; ".join(notes))
+            context.update({
+                "result": result, "filter_summary": "; ".join(parts)
+            })
+        except (DatabaseError, ImproperlyConfigured):
+            context["report_error"] = (
+                "The report database is temporarily unavailable. Please try again later."
+            )
+        return context
+
+
+class BoneDistributionReportView(BonesAuthMixin, TemplateView):
+    template_name = "bones/reports/bone_distribution.html"
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data(**kwargs)
+        if context.get("result") and request.GET.get("export") == "xlsx":
+            payload = export_bone_distribution_workbook(
+                context["result"], context["filter_summary"],
+                context["calculation_rules"],
+            )
+            response = HttpResponse(
+                payload,
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+            response["Content-Disposition"] = 'attachment; filename="bone-distribution-report.xlsx"'
+            return response
+        return self.render_to_response(context)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        form = BoneDistributionReportForm(data=self.request.GET)
+        note_filter = CompletedTransectFilterSet(
+            data=self.request.GET, queryset=CompletedTransect.objects.none()
+        )
+        context.update({
+            "page_title": "Bone distribution report", "form": form,
+            "note_filter": note_filter, "result": None, "report_error": "",
+            "calculation_rules": BONE_DISTRIBUTION_RULES,
+            "export_query": self.request.GET.urlencode()
+            + ("&" if self.request.GET else "") + "export=xlsx",
+        })
+        if not form.is_valid():
+            return context
+        try:
+            result = build_bone_distribution_report(
+                form.cleaned_data, note_filter.note_filters
+            )
+            selected = form.cleaned_data
+            parts = [
+                "years: " + (", ".join(selected.get("years", [])) or "all eligible"),
+                "habitats: " + (", ".join(selected.get("habitats", [])) or "all"),
+                "old reserve: " + (selected.get("reserve") or "both"),
+            ]
+            if note_filter.note_filters:
+                notes = [
+                    f'{row.get("phase")}/{row.get("question")}: '
+                    f'{", ".join(row.get("responses", [])) or "any response"}'
+                    for row in note_filter.note_filters
+                ]
+                parts.append("transect notes: " + "; ".join(notes))
+            context.update({
+                "result": result, "filter_summary": "; ".join(parts)
+            })
+        except (DatabaseError, ImproperlyConfigured):
+            context["report_error"] = (
+                "The report database is temporarily unavailable. Please try again later."
+            )
+        return context
+
+
+class TeethDistributionReportView(BonesAuthMixin, TemplateView):
+    template_name = "bones/reports/teeth_distribution.html"
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data(**kwargs)
+        if context.get("result") and request.GET.get("export") == "xlsx":
+            payload = export_teeth_distribution_workbook(
+                context["result"], context["filter_summary"], context["calculation_rules"]
+            )
+            response = HttpResponse(payload, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            response["Content-Disposition"] = 'attachment; filename="teeth-distribution-report.xlsx"'
+            return response
+        return self.render_to_response(context)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        form = TeethDistributionReportForm(data=self.request.GET)
+        note_filter = CompletedTransectFilterSet(data=self.request.GET, queryset=CompletedTransect.objects.none())
+        context.update({
+            "page_title": "Teeth distribution report", "form": form,
+            "note_filter": note_filter, "result": None, "report_error": "",
+            "calculation_rules": TEETH_DISTRIBUTION_RULES,
+            "export_query": self.request.GET.urlencode() + ("&" if self.request.GET else "") + "export=xlsx",
+        })
+        if not form.is_valid():
+            return context
+        try:
+            result = build_teeth_distribution_report(form.cleaned_data, note_filter.note_filters)
+            selected = form.cleaned_data
+            parts = [
+                "years: " + (", ".join(selected.get("years", [])) or "all eligible"),
+                "habitats: " + (", ".join(selected.get("habitats", [])) or "all"),
+                "old reserve: " + (selected.get("reserve") or "both"),
+            ]
+            context.update({"result": result, "filter_summary": "; ".join(parts)})
+        except (DatabaseError, ImproperlyConfigured):
+            context["report_error"] = "The report database is temporarily unavailable. Please try again later."
+        return context
+
+
+class TransectDetectionReportView(BonesAuthMixin, TemplateView):
+    template_name = "bones/reports/transect_detection.html"
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data(**kwargs)
+        if context.get("result") and request.GET.get("export") == "xlsx":
+            payload = export_transect_detection_workbook(
+                context["result"], context["filter_summary"], context["calculation_rules"]
+            )
+            response = HttpResponse(payload, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            response["Content-Disposition"] = 'attachment; filename="transect-detection-report.xlsx"'
+            return response
+        return self.render_to_response(context)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        has_filters = any(key != "export" for key in self.request.GET)
+        if has_filters:
+            data = self.request.GET
+        else:
+            defaults = TransectDetectionReportForm()
+            data = self.request.GET.copy()
+            data.setlist("excluded_taxa", defaults.initial.get("excluded_taxa", []))
+        form = TransectDetectionReportForm(data=data)
+        note_filter = CompletedTransectFilterSet(data=data, queryset=CompletedTransect.objects.none())
+        context.update({
+            "page_title": "Transect detection report", "form": form,
+            "note_filter": note_filter, "result": None, "report_error": "",
+            "calculation_rules": TRANSECT_DETECTION_RULES,
+            "export_query": self.request.GET.urlencode() + ("&" if self.request.GET else "") + "export=xlsx",
+        })
+        if not form.is_valid():
+            return context
+        try:
+            result = build_transect_detection_report(form.cleaned_data, note_filter.note_filters)
+            selected = form.cleaned_data
+            parts = [
+                f"{len(result.transect_rows)} eligible transects",
+                "years: " + (", ".join(selected.get("years", [])) or "all eligible"),
+                "habitats: " + (", ".join(selected.get("habitats", [])) or "all"),
+                "old reserve: " + (selected.get("reserve") or "both"),
+                "excluded taxa: " + (", ".join(selected.get("excluded_taxa", [])) or "none"),
+            ]
+            context.update({"result": result, "filter_summary": "; ".join(parts)})
+        except (DatabaseError, ImproperlyConfigured):
+            context["report_error"] = "The report database is temporarily unavailable. Please try again later."
         return context
 
 

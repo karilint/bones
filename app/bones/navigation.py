@@ -157,6 +157,11 @@ NAVIGATION_SECTIONS: List[NavigationLink] = [
         "url_name": "bones:reports:mni",
         "children": [
             {"label": "MNI Summary", "url_name": "bones:reports:mni"},
+            {"label": "Weathering", "url_name": "bones:reports:weathering"},
+            {"label": "Carnivore Damage", "url_name": "bones:reports:carnivore"},
+            {"label": "Bone Distribution", "url_name": "bones:reports:bone_distribution"},
+            {"label": "Teeth Distribution", "url_name": "bones:reports:teeth_distribution"},
+            {"label": "Transect Detection", "url_name": "bones:reports:transect_detection"},
             {"label": "Bone Census Data", "url_name": "bones:reports:mni_analysis"},
             {"label": "Data Reconciliation", "url_name": "bones:reports:data_reconciliation"},
         ],

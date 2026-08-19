@@ -95,6 +95,35 @@ class MNIReportForm(forms.Form):
             pass
 
 
+class WeatheringReportForm(MNIReportForm):
+    """Use the exact population and taxon-exclusion filters from MNI."""
+
+
+class CarnivoreReportForm(MNIReportForm):
+    """Population filters for bone-level carnivore observations."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields.pop("excluded_taxa", None)
+
+
+class BoneDistributionReportForm(CarnivoreReportForm):
+    """Population filters for bone element distributions."""
+
+
+class TeethDistributionReportForm(CarnivoreReportForm):
+    """Population filters for Dentition tooth-type distributions."""
+
+
+class TransectDetectionReportForm(WeatheringReportForm):
+    """Filters for detection data, with no default taxon exclusions."""
+
+    def __init__(self, *args, **kwargs):
+        kwargs["apply_population_rules"] = False
+        super().__init__(*args, **kwargs)
+        self.initial["excluded_taxa"] = []
+
+
 class BoneCensusExportForm(MNIReportForm):
     include_elements = forms.BooleanField(
         required=False, initial=False,

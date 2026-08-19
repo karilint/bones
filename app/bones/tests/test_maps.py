@@ -163,6 +163,15 @@ class MapDataViewTests(SimpleTestCase):
         self.assertIn("properties.track_index", script)
         self.assertIn("control.layers(null, deviceLayers", script)
 
+    def test_all_interactive_maps_include_metric_scale(self):
+        script = (
+            Path(__file__).resolve().parents[1]
+            / "static" / "bones" / "js" / "maps.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn("control.scale", script)
+        self.assertIn("metric: true", script)
+        self.assertIn("imperial: false", script)
+
     def test_occurrence_map_marks_selected_occurrence(self):
         selected = SimpleNamespace(pk=7, occurrence_number=2, lat=-0.15, long=36.75)
         other = SimpleNamespace(pk=8, occurrence_number=3, lat=-0.16, long=36.76)

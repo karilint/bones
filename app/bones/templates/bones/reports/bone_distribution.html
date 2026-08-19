@@ -1,0 +1,25 @@
+{% extends "bones/base.html" %}
+{% load static %}
+{% block title %}{{ page_title }} - Bones{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">{% endblock %}
+{% block main %}
+<header class="w3-container w3-padding-16"><h1>{{ page_title }}</h1><p>Bone specimen element percentages grouped anatomically by habitat.</p></header>
+{% if report_error %}<div class="w3-panel w3-pale-red w3-border w3-border-red" role="alert">{{ report_error }}</div>{% endif %}
+<form method="get" class="w3-card w3-white w3-padding w3-margin-bottom" aria-label="Bone distribution report filters">
+  <div class="w3-row-padding">{% for field in form %}<div class="w3-col s12 m6 l4 w3-margin-bottom"><label class="w3-text-grey w3-small" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<span class="w3-text-red w3-small">{{ error }}</span>{% endfor %}</div>{% endfor %}</div>
+  {% include "bones/partials/note_filter_group.html" with group_id="bone-distribution-transect-notes" title="Transect note filters" prefix="note_" rows=note_filter.note_filter_form_rows choices=note_filter.note_filter_choices response_map_id="bone-distribution-note-response-map" max_rows=10 %}
+  <button class="w3-button w3-blue" type="submit"><span class="fa fa-filter" aria-hidden="true"></span> Apply filters</button>
+  <a class="w3-button w3-white w3-border" href="{% url 'bones:reports:bone_distribution' %}"><span class="fa fa-eraser" aria-hidden="true"></span> Clear</a>
+</form>
+{% if result %}
+<section aria-labelledby="bone-distribution-results">
+  <div class="w3-row w3-margin-bottom"><div class="w3-col s12 m8"><h2 id="bone-distribution-results">Results</h2><p>{{ filter_summary }}</p></div><div class="w3-col s12 m4 w3-right-align"><a class="w3-button w3-green" href="?{{ export_query }}"><span class="fa-solid fa-file-excel" aria-hidden="true"></span> Export Excel</a></div></div>
+  <div class="bones-report-table-wrap" tabindex="0" aria-label="Scrollable bone distribution report table">
+    <table class="w3-table-all w3-small bones-report-table"><caption class="w3-hide">Bone element distribution by habitat</caption><thead><tr><th scope="col" class="bones-sticky-column">Element</th>{% for habitat in result.habitats %}<th scope="col">{{ habitat }}</th>{% endfor %}</tr></thead><tbody>{% for row in result.rows %}{% if row.kind == "subheader" %}<tr class="w3-blue-grey"><th scope="rowgroup" colspan="{{ result.habitats|length|add:1 }}">{{ row.label }}</th></tr>{% else %}<tr><th scope="row" class="bones-sticky-column">{{ row.label }}</th>{% for value in row.values %}<td>{% if row.kind == "count" %}{{ value|floatformat:0 }}{% else %}{{ value|floatformat:2 }}{% endif %}</td>{% endfor %}</tr>{% endif %}{% endfor %}</tbody></table>
+  </div>
+</section>
+{% if result.warnings %}<aside class="w3-panel w3-pale-yellow w3-border w3-margin-top" aria-labelledby="bone-distribution-warnings"><h2 id="bone-distribution-warnings">Data quality</h2><ul>{% for warning in result.warnings %}<li>{{ warning }}</li>{% endfor %}</ul></aside>{% endif %}
+<aside class="w3-panel w3-pale-blue w3-border w3-margin-top" aria-labelledby="bone-distribution-rules"><h2 id="bone-distribution-rules">Exact calculation rules</h2><p>These same rules are included in the Excel workbook.</p><ol>{% for rule in calculation_rules %}<li>{{ rule }}</li>{% endfor %}</ol><p><strong>Applied filters:</strong> {{ filter_summary }}</p></aside>
+{% endif %}
+{% endblock %}
+{% block scripts %}<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script><script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script><script src="{% static 'bones/js/note_filters.js' %}"></script>{% endblock %}

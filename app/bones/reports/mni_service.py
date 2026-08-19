@@ -287,7 +287,11 @@ def build_report(
         for transect in transects
     }
     result.occurrence_metadata = {
-        occurrence.pk: {"number": occurrence.occurrence_number}
+        occurrence.pk: {
+            "number": occurrence.occurrence_number,
+            "transect_id": occurrence.transect_id,
+            "taxon": occurrence_taxa.get(occurrence.pk, ""),
+        }
         for occurrence in occurrences
     }
     result.weathering_age_max = {

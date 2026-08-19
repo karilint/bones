@@ -147,6 +147,12 @@
                 maxNativeZoom: maxZoom,
                 maxZoom: maxZoom + 2
             }).addTo(map);
+            window.L.control.scale({
+                position: "bottomleft",
+                metric: true,
+                imperial: false,
+                maxWidth: 160
+            }).addTo(map);
 
             const layer = window.L.geoJSON(geojson, {
                 style: featureStyle,
