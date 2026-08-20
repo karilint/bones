@@ -25,10 +25,10 @@ jobs:
       DJANGO_SETTINGS_MODULE: config.test_settings
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14"
           cache: pip
@@ -65,7 +65,7 @@ jobs:
       SECRET_KEY: ci-only-key-with-sufficient-length-and-entropy-not-for-production
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Build application image
         run: docker build --tag bones-ci:${{ github.sha }} app
