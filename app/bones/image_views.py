@@ -10,6 +10,7 @@ from django.db.models import Q
 from django.http import FileResponse, Http404, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 from PIL import ExifTags, Image
 
@@ -53,6 +54,17 @@ def resolve_parent(entity_type, entity_id):
 
 def can_view(user, entity_type):
     return user.is_authenticated and user.has_perm(ENTITY_PERMISSIONS[entity_type])
+
+
+def _safe_next_url(request):
+    next_url = request.POST.get("next")
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return next_url
+    return "/"
 
 
 def image_context(entity_type, entity_id, user):
@@ -173,7 +185,7 @@ class ImageUploadView(LoginRequiredMixin, View):
         if form.is_valid():
             for upload in form.cleaned_data["images"]:
                 save_image(upload, entity_type, entity_id, request.user, form.cleaned_data["alt_text"])
-        return redirect(request.POST.get("next") or "/")
+        return redirect(_safe_next_url(request))
 
 
 class ProtectedImageView(LoginRequiredMixin, View):
@@ -210,7 +222,7 @@ class ImageDeleteView(LoginRequiredMixin, View):
                 link._change_reason = "Image unlinked from entity"
                 link.delete()
                 write_image_index()
-                return redirect(request.POST.get("next") or "/")
+                return redirect(_safe_next_url(request))
         record._history_user = request.user
         record._change_reason = (
             "Deleted by uploader" if request.user == record.uploaded_by
@@ -218,4 +230,4 @@ class ImageDeleteView(LoginRequiredMixin, View):
         )
         record.delete()
         write_image_index()
-        return redirect(request.POST.get("next") or "/")
+        return redirect(_safe_next_url(request))

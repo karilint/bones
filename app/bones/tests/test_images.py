@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from django.core.files.storage import FileSystemStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import SimpleTestCase
+from django.test import RequestFactory, SimpleTestCase
 from django.urls import resolve
 from uuid import uuid4
 from io import BytesIO
@@ -16,7 +16,7 @@ from ..admin import BulkForm
 from ..image_forms import EntityImageUploadForm
 from ..image_imports import norm, parse_filename, resolve_filename
 from ..image_processing import normalize_image
-from ..image_views import ImageDeleteView
+from ..image_views import ImageDeleteView, _safe_next_url
 from ..models import (
     CompletedOccurrenceInfo, CompletedResponse, CompletedTransectInfo,
     CompletedTransectTrack, DataLogFile, DataType, DataTypeOption, EntityImage,
@@ -26,6 +26,19 @@ from ..models.images import entity_image_path, remove_empty_image_directories, s
 
 
 class EntityImageTests(SimpleTestCase):
+    def test_safe_next_url_accepts_local_paths(self):
+        request = RequestFactory().post("/images/upload/transect/1/", {"next": "/images/"})
+
+        self.assertEqual(_safe_next_url(request), "/images/")
+
+    def test_safe_next_url_rejects_external_redirects(self):
+        request = RequestFactory().post(
+            "/images/upload/transect/1/",
+            {"next": "https://attacker.example/steal"},
+        )
+
+        self.assertEqual(_safe_next_url(request), "/")
+
     def test_image_normalization_bounds_dimensions_and_returns_jpeg(self):
         content = BytesIO()
         Image.new("RGB", (5000, 2500), "blue").save(content, "JPEG", quality=95)

@@ -12,7 +12,6 @@ site_domain = os.environ.get('SITE_DOMAIN', 'localhost:8000')
 if not User.objects.filter(username=username).exists():
     print('CREATING DJANGO SUPERUSER')
     print(f'Username: {username}')
-    print(f'Password: {password}')
     print(f'Email: {email}')
     user = User.objects.create_user(username, email, password,
                                     is_superuser=1, is_staff=1)
