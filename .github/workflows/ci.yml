@@ -22,6 +22,7 @@ jobs:
     env:
       DEBUG: "0"
       SECRET_KEY: ci-only-key-with-sufficient-length-and-entropy-not-for-production
+      DJANGO_SETTINGS_MODULE: config.test_settings
     steps:
       - name: Check out repository
         uses: actions/checkout@v7.0.1
@@ -62,7 +63,6 @@ jobs:
     env:
       DEBUG: "0"
       SECRET_KEY: ci-only-key-with-sufficient-length-and-entropy-not-for-production
-      DJANGO_SETTINGS_MODULE: config.test_settings
     steps:
       - name: Check out repository
         uses: actions/checkout@v7.0.1
