@@ -3,7 +3,7 @@ asgiref>=3.5.2
 sqlparse==0.6.0
 debugpy==1.8.21
 gunicorn==22.0.0
-mssql-django>=1.4
+mssql-django>=1.8.0
 pyodbc>=5.3.0
 python-dotenv>=1.0
 # Third-party integrations for history tracking and enhanced widgets
