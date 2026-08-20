@@ -1,14 +1,14 @@
 Django==5.2.16
 asgiref>=3.5.2
 sqlparse==0.6.0
-debugpy==1.5.1
+debugpy==1.8.21
 gunicorn==22.0.0
 mssql-django>=1.4
 pyodbc>=4.0
 python-dotenv>=1.0
 # Third-party integrations for history tracking and enhanced widgets
-django-simple-history==3.4.0
-django-select2==8.4.1
+django-simple-history==3.13.0
+django-select2==8.4.8
 django-filter==23.5
 Pillow>=12.3.0,<13
 openpyxl>=3.1,<4
