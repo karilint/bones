@@ -47,6 +47,63 @@ body {
     width: 100%;
     height: auto;
 }
+.bones-image-gallery {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+.bones-image-card {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(150px, 1fr);
+    align-items: stretch;
+    overflow: hidden;
+}
+.bones-image-card-media {
+    display: block;
+    min-height: 160px;
+}
+.bones-image-card .bones-image-thumbnail {
+    height: 100%;
+    object-fit: cover;
+}
+.bones-image-card-body {
+    min-width: 0;
+}
+.bones-image-facts {
+    margin: 0.75rem 0 0;
+}
+.bones-image-facts div {
+    margin-bottom: 0.35rem;
+}
+.bones-image-facts dt {
+    color: #757575;
+    font-weight: 600;
+}
+.bones-image-facts dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+    .bones-image-gallery {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 600px) {
+    .bones-image-card {
+        grid-template-columns: 1fr;
+    }
+
+    .bones-image-card-media {
+        min-height: 0;
+    }
+
+    .bones-image-card .bones-image-thumbnail {
+        height: auto;
+        aspect-ratio: 4 / 3;
+    }
+}
 .bones-map {
     width: 100%;
     min-height: 28rem;

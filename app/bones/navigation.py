@@ -152,6 +152,15 @@ NAVIGATION_SECTIONS: List[NavigationLink] = [
         ],
     },
     {
+        "label": "Images",
+        "icon": "fa-solid fa-images",
+        "url_name": "bones:images",
+        "children": [
+            {"label": "Image Gallery", "url_name": "bones:images"},
+            {"label": "Image History", "url_name": "bones:history:images"},
+        ],
+    },
+    {
         "label": "Reports",
         "icon": "fa-solid fa-chart-column",
         "url_name": "bones:reports:mni",

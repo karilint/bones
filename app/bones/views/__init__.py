@@ -1,6 +1,7 @@
 from .instance import CompletedInstanceDetailView
 """View package exports for the Bones application."""
 from .dashboard import DashboardView
+from .images import ImageGalleryView
 from .detail import (
     DataLogFileDetailView,
     DataLogFilePayloadView,
@@ -49,6 +50,7 @@ from .reports import (BoneDistributionReportView, CarnivoreReportView,
 
 __all__ = [
     "DashboardView",
+    "ImageGalleryView",
     "CompletedTransectListView",
     "CompletedOccurrenceListView",
     "CompletedWorkflowListView",

@@ -1,0 +1,56 @@
+{% extends "bones/base.html" %}
+{% load i18n %}
+{% block title %}{% trans "Images" %} | Bones{% endblock %}
+{% block breadcrumbs %}{% include "bones/partials/breadcrumbs.html" %}{% endblock %}
+{% block main %}
+<header class="w3-margin-bottom">
+  <h2 class="w3-margin-0"><span class="fa-solid fa-images" aria-hidden="true"></span> {% trans "Images" %}</h2>
+  <p class="w3-text-grey">{% trans "Browse survey photographs and combine transect, occurrence, and instance filters." %}</p>
+</header>
+{% if filter_error %}<div class="w3-panel w3-pale-red w3-border w3-border-red" role="alert"><p>{% trans "Images are temporarily unavailable. Please try again later." %}</p></div>{% endif %}
+<form method="get" class="w3-card w3-white w3-padding w3-margin-bottom" aria-label="Image filters">
+  <fieldset class="w3-border-0 w3-padding-0"><legend class="w3-large"><span class="fa-solid fa-route" aria-hidden="true"></span> {% trans "Transect" %}</legend><div class="w3-row-padding">
+    {% for field in filter_form %}{% if field.name == "transect" or field.name == "habitat" %}<div class="w3-col s12 m6 w3-margin-bottom"><label class="w3-text-grey w3-small" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<span class="w3-text-red w3-small">{{ error }}</span>{% endfor %}</div>{% endif %}{% endfor %}
+  </div></fieldset>
+  <fieldset class="w3-border-0 w3-padding-0"><legend class="w3-large"><span class="fa-solid fa-frog" aria-hidden="true"></span> {% trans "Occurrence" %}</legend><div class="w3-row-padding">
+    {% for field in filter_form %}{% if field.name == "occurrence" or field.name == "taxon" %}<div class="w3-col s12 m6 w3-margin-bottom"><label class="w3-text-grey w3-small" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<span class="w3-text-red w3-small">{{ error }}</span>{% endfor %}</div>{% endif %}{% endfor %}
+  </div></fieldset>
+  <fieldset class="w3-border-0 w3-padding-0"><legend class="w3-large"><span class="fa-solid fa-bone" aria-hidden="true"></span> {% trans "Instance" %}</legend><div class="w3-row-padding">
+    {% for field in filter_form %}{% if field.name == "instance" or field.name == "element" %}<div class="w3-col s12 m6 w3-margin-bottom"><label class="w3-text-grey w3-small" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<span class="w3-text-red w3-small">{{ error }}</span>{% endfor %}</div>{% endif %}{% endfor %}
+  </div></fieldset>
+  <button type="submit" class="w3-button w3-blue w3-margin-right"><span class="fa-solid fa-filter" aria-hidden="true"></span> {% trans "Apply filters" %}</button>
+  <a href="{% url 'bones:images' %}" class="w3-button w3-white w3-border"><span class="fa-solid fa-eraser" aria-hidden="true"></span> {% trans "Clear" %}</a>
+</form>
+<section aria-labelledby="image-results-heading">
+  <h3 id="image-results-heading" class="w3-large">{{ result_count }} {% trans "image results" %}</h3>
+  {% if images %}<div class="bones-image-gallery">
+    {% for image in images %}<article class="w3-card w3-white bones-image-card">
+      <a href="{% url 'bones:image_file' image.pk 'original' %}" target="_blank" rel="noopener" class="bones-image-card-media"><img src="{% url 'bones:image_file' image.pk 'thumbnail' %}" alt="{{ image.alt_text|default:image.generated_alt_text }}" class="bones-image-thumbnail" loading="lazy"></a>
+      {% with metadata=image.gallery_metadata %}
+      <div class="w3-container w3-padding-small bones-image-card-body">
+        <p class="w3-small w3-margin-0"><strong>
+          {% if metadata.transect_uid %}<a href="{% url 'bones:transects:detail' metadata.transect_uid %}">{{ metadata.transect_name|default:"Unknown transect" }}</a>{% else %}{{ metadata.transect_name|default:"Unknown transect" }}{% endif %}{% if metadata.transect_photo_role %} &middot; {{ metadata.transect_photo_role }}{% endif %}
+        </strong></p>
+        <p class="w3-small w3-text-grey w3-margin-0">
+          {% if image.entity_type != "transect" and metadata.occurrence_number %}
+            {% if metadata.occurrence_id %}<a href="{% url 'bones:occurrences:detail' metadata.occurrence_id %}">{% trans "Occurrence" %} {{ metadata.occurrence_number }}</a>{% else %}{% trans "Occurrence" %} {{ metadata.occurrence_number }}{% endif %}
+          {% endif %}
+          {% if image.entity_type == "instance" and metadata.instance_number %}
+            &middot; {% if metadata.occurrence_id %}<a href="{% url 'bones:occurrences:instance_detail' metadata.occurrence_id metadata.instance_number %}">{% trans "Instance" %} {{ metadata.instance_number }}</a>{% else %}{% trans "Instance" %} {{ metadata.instance_number }}{% endif %}
+          {% endif %}
+        </p>
+        <dl class="bones-image-facts w3-small">
+          <div><dt>{% trans "Habitat" %}</dt><dd>{{ metadata.habitat|default:"—" }}</dd></div>
+          {% if image.entity_type != "transect" %}<div><dt>{% trans "Taxon" %}</dt><dd>{{ metadata.taxon|default:"—" }}</dd></div>{% endif %}
+          {% if image.entity_type == "instance" %}
+            <div><dt>{% trans "Element" %}</dt><dd>{{ metadata.element|default:"—" }}</dd></div>
+            <div><dt>{% trans "Side" %}</dt><dd>{{ metadata.side|default:"—" }}</dd></div>
+          {% endif %}
+        </dl>
+      </div>
+      {% endwith %}
+    </article>{% endfor %}
+  </div>{% include "bones/partials/pagination.html" %}
+  {% else %}<div class="w3-panel w3-pale-blue w3-border"><p>{% trans "No images match these filters." %}</p></div>{% endif %}
+</section>
+{% endblock %}
