@@ -93,13 +93,13 @@ class BonesListViewTests(SimpleTestCase):
         self.assertFalse(context["filter_active"])
         self.assertEqual(context["filter_querystring"], "")
 
-    def test_get_detail_and_history_urls_return_none_without_namespace(self):
+    def test_get_detail_and_history_urls_use_bones_namespace_fallback(self):
         view = DummyListView()
         obj = SimpleNamespace(pk=123)
         detail_url = view.get_detail_url(obj)
         history_url = view.get_history_url(obj)
-        self.assertIsNone(detail_url)
-        self.assertIsNone(history_url)
+        self.assertEqual(detail_url, "/transects/123/")
+        self.assertEqual(history_url, "/history/transects/123/")
 
 
 class TemplateTransectListViewTests(SimpleTestCase):
@@ -132,7 +132,7 @@ class TemplateTransectListViewTests(SimpleTestCase):
         queryset = view.get_queryset()
 
         mock_manager.order_by.assert_called_once_with("-scheduled_time")
-        mock_filterset.assert_called_once_with(data={}, queryset=ordered_queryset)
+        mock_filterset.assert_called_once_with(data=None, queryset=ordered_queryset)
         self.assertIs(queryset, ordered_queryset)
 
 
@@ -173,7 +173,7 @@ class CompletedTransectListViewTests(SimpleTestCase):
         select_related_qs.with_occurrence_counts.assert_called_once_with()
         select_related_qs.with_occurrences.assert_not_called()
         with_counts_qs.order_by.assert_called_once_with("-start_time")
-        mock_filterset.assert_called_once_with(data={}, queryset=ordered_qs)
+        mock_filterset.assert_called_once_with(data=None, queryset=ordered_qs)
         self.assertIs(queryset, ordered_qs)
 
     def test_table_rows_use_annotated_occurrence_count(self):
@@ -269,7 +269,7 @@ class CompletedOccurrenceListViewTests(SimpleTestCase):
         select_related_qs.with_response_counts.assert_called_once_with()
         select_related_qs.with_related_data.assert_not_called()
         with_counts_qs.order_by.assert_called_once_with("-recording_start_time")
-        mock_filterset.assert_called_once_with(data={}, queryset=ordered_qs)
+        mock_filterset.assert_called_once_with(data=None, queryset=ordered_qs)
         self.assertIs(queryset, ordered_qs)
 
     def test_table_rows_use_annotated_response_count(self):

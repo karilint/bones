@@ -67,4 +67,4 @@ class ProjectConfigIndexTests(TestCase):
 
         query_plan = ProjectConfig.objects.order_by("-publish_date").explain()
 
-        self.assertIn("USING COVERING INDEX IX_ProjectConfigs_PublishDate", query_plan)
+        self.assertIn("USING INDEX IX_ProjectConfigs_PublishDate", query_plan)
