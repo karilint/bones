@@ -1,0 +1,119 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DEBUG: "0"
+      SECRET_KEY: release-only-key-with-sufficient-length-and-entropy-not-for-production
+      DJANGO_SETTINGS_MODULE: config.test_settings
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Validate release metadata
+        shell: bash
+        run: |
+          version="$(tr -d '\r\n' < app/VERSION)"
+          [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "v${version}" = "${GITHUB_REF_NAME}"
+          test -f "docs/releases/${GITHUB_REF_NAME}.md"
+          git fetch --no-tags origin main
+          release_commit="$(git rev-parse "${GITHUB_SHA}^{commit}")"
+          git merge-base --is-ancestor "${release_commit}" origin/main
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: app/requirements-ci.txt
+
+      - name: Install locked dependencies
+        run: python -m pip install --require-hashes -r app/requirements-ci.txt
+
+      - name: Verify application
+        working-directory: app
+        run: |
+          ruff check --select E9,F63,F7,F82 .
+          python -m compileall -q .
+          python manage.py check
+          python manage.py test bones.tests
+
+  publish:
+    name: Publish release
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write
+      packages: write
+    env:
+      IMAGE_NAME: ghcr.io/${{ github.repository }}
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Generate image metadata
+        id: metadata
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,format=long
+            type=raw,value=latest
+
+      - name: Build and publish image
+        id: build
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: ./app
+          labels: ${{ steps.metadata.outputs.labels }}
+          provenance: mode=max
+          push: true
+          sbom: true
+          tags: ${{ steps.metadata.outputs.tags }}
+
+      - name: Attest image provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "${GITHUB_REF_NAME}"
+          --repo "${GITHUB_REPOSITORY}"
+          --verify-tag
+          --title "Bones ${GITHUB_REF_NAME}"
+          --notes-file "docs/releases/${GITHUB_REF_NAME}.md"
