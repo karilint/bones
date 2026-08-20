@@ -61,6 +61,22 @@ For any non-trivial feature, bug fix, refactor, migration, or test change:
 For very small requests, Codex may skip writing out a formal plan, but it must
 still inspect the relevant code before editing.
 
+## Protected Branch Workflow
+
+The main branch is protected. For changes intended for main:
+
+1. Do not develop, commit, or push directly on main.
+2. Create a focused feature or fix branch.
+3. Commit only the reviewed files and push that branch.
+4. Open a pull request targeting main.
+5. Wait for the required "Django checks and tests" status check to pass and
+   update the branch if GitHub reports it is behind main.
+6. Resolve all review conversations before merging.
+
+The repository requires a pull request but does not require an approving review,
+so a solo maintainer may merge their own pull request after the required check
+passes. Force-pushing to or deleting main is prohibited.
+
 ## Windows Local Tooling
 
 This repository is commonly edited from Windows under a Group Policy that may
