@@ -70,8 +70,8 @@ The main branch is protected. For changes intended for main:
 3. Commit only the reviewed files and push that branch.
 4. Open a pull request targeting main.
 5. Wait for the required "Django checks and tests", "Docker image build and
-   tests", and "CodeQL" status checks to pass, and update the branch if GitHub
-   reports it is behind main.
+   tests", "CodeQL", and "Dependency review" status checks to pass, and update
+   the branch if GitHub reports it is behind main.
 6. Resolve all review conversations before merging.
 
 The repository requires a pull request but does not require an approving review,
