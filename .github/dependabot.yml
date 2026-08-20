@@ -16,10 +16,6 @@ updates:
       - python
     commit-message:
       prefix: deps
-    ignore:
-      - dependency-name: Django
-        update-types:
-          - version-update:semver-major
     groups:
       python-minor-and-patch:
         patterns:
@@ -59,11 +55,6 @@ updates:
       - dependencies
     commit-message:
       prefix: docker
-    ignore:
-      - dependency-name: python
-        update-types:
-          - version-update:semver-major
-          - version-update:semver-minor
     groups:
       docker-images:
         patterns:
