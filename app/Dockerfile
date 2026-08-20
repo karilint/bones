@@ -1,4 +1,4 @@
-FROM python:3.14.7-slim-bookworm
+FROM python:3.14.7-slim-bookworm@sha256:23c59390fc717bf09f9336908199a0ae75d9c4264bf296123f94ad772fea3b52
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
@@ -22,7 +22,7 @@ RUN useradd --create-home user \
     && chmod 750 /vol/web/media
 
 COPY requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir -r /tmp/requirements.txt
+RUN pip install --no-cache-dir --require-hashes -r /tmp/requirements.txt
 
 COPY --chown=user:user . /src/app
 

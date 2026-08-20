@@ -186,6 +186,17 @@ When changing Django code, templates, filters, forms, navigation, or history:
 - Keep test changes focused on the behavior under test. Do not weaken assertions
   broadly to hide regressions.
 
+## Python Dependency Locks
+
+- Treat `app/requirements.in` and `app/requirements-ci.in` as the editable
+  dependency declarations.
+- Treat `app/requirements.txt` and `app/requirements-ci.txt` as generated,
+  hash-locked files; do not edit package versions or hashes by hand.
+- Regenerate both lockfiles with `pip-compile --generate-hashes --strip-extras`
+  under Python 3.14 whenever an input dependency changes.
+- The application image installs `requirements.txt`; GitHub CI installs
+  `requirements-ci.txt`, which additionally includes Ruff.
+
 ## Validation Expectations
 
 Before finishing, run the narrowest useful checks for the task and broaden them
