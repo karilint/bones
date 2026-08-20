@@ -55,6 +55,11 @@ updates:
       - dependencies
     commit-message:
       prefix: docker
+    ignore:
+      - dependency-name: python
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
     groups:
       docker-images:
         patterns:
