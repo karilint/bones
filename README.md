@@ -1,12 +1,12 @@
 # Bones Django Project
 
-This repository contains a Django 4 project configured to run against a Microsoft SQL Server
+This repository contains a Django 6.1 project configured to run against a Microsoft SQL Server
 instance in local development. Environment variables are stored in a `.env` file that is
 loaded automatically by `settings.py`.
 
 ## Prerequisites
 
-* Python 3.10+
+* Python 3.14
 * A local Microsoft SQL Server instance (Developer or Express edition works well)
 * The Microsoft ODBC Driver for SQL Server (version 17 or 18)
 * `virtualenv` or another tool for managing isolated Python environments
