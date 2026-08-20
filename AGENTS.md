@@ -197,6 +197,18 @@ When changing Django code, templates, filters, forms, navigation, or history:
 - The application image installs `requirements.txt`; GitHub CI installs
   `requirements-ci.txt`, which additionally includes Ruff.
 
+## Release Workflow
+
+- Follow `docs/releases.md` for version and release work.
+- Keep `app/VERSION`, `CHANGELOG.md`, and `docs/releases/vX.Y.Z.md` aligned in
+  the release pull request.
+- Create a release tag only from a commit contained in protected `main`, after
+  every required pull-request check has passed.
+- Never move or reuse a published version tag. Prepare a new patch release for
+  corrections.
+- Treat GHCR version and source-commit tags as deployment artifacts; do not use
+  mutable `latest` when reproducibility or rollback matters.
+
 ## Validation Expectations
 
 Before finishing, run the narrowest useful checks for the task and broaden them

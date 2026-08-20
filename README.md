@@ -4,6 +4,17 @@ This repository contains a Django 6.1 project configured to run against a Micros
 instance in local development. Environment variables are stored in a `.env` file that is
 loaded automatically by `settings.py`.
 
+## Releases
+
+Bones follows Semantic Versioning. The current release version is recorded in
+[`app/VERSION`](app/VERSION), and release history is maintained in
+[`CHANGELOG.md`](CHANGELOG.md). See the [release process](docs/releases.md) for
+tagging, validation, and container publication details.
+
+Stable containers are published to `ghcr.io/karilint/bones` with version and
+source-commit tags. Production deployments should use an immutable version or
+commit tag rather than `latest`.
+
 ## Prerequisites
 
 * Python 3.14
