@@ -18,13 +18,23 @@ an entry in `CHANGELOG.md` and a notes file at `docs/releases/vX.Y.Z.md`.
 1. Create a release branch from current `main`.
 2. Update `app/VERSION`, `CHANGELOG.md`, and the versioned release-notes file.
 3. Merge the release pull request after all required checks pass.
-4. Create and push the matching `vX.Y.Z` tag at the merge commit.
+4. Create the matching signed `vX.Y.Z` tag at the merge commit and verify its
+   signature locally before pushing it:
+
+   ```bash
+   git tag -s vX.Y.Z -m "Bones vX.Y.Z"
+   git tag -v vX.Y.Z
+   git push origin vX.Y.Z
+   ```
+
 5. Wait for the `Release` workflow to verify the tag, rerun the application
    checks, publish the container, attest it, and create the GitHub release.
 
 The workflow rejects tags whose version differs from `app/VERSION`, tags that
-are not contained in `main`, and releases without versioned notes. Published
-tags must never be moved or reused; issue a new patch release instead.
+are not contained in `main`, and releases without versioned notes. Repository
+rules also reject unsigned release tags. Published tags must never be moved or
+reused; issue a new patch release instead. The original `v1.0.0` tag predates
+the signature requirement and remains immutable rather than being rewritten.
 
 ## Release artifacts
 

@@ -197,6 +197,9 @@ When changing Django code, templates, filters, forms, navigation, or history:
   `pip-compile --allow-unsafe --generate-hashes --strip-extras` under Python
   3.14 whenever an input dependency changes. The CI lock includes its pinned
   bootstrap tooling so every installed package remains hash checked.
+- CI compares regenerated locks semantically. It tolerates only repeated
+  identical hash lines emitted by Dependabot; version, dependency, header, and
+  effective hash-set drift must fail validation.
 - The application image installs `requirements.txt`; GitHub CI installs
   `requirements-ci.txt`, which additionally includes Ruff.
 
@@ -205,8 +208,9 @@ When changing Django code, templates, filters, forms, navigation, or history:
 - Follow `docs/releases.md` for version and release work.
 - Keep `app/VERSION`, `CHANGELOG.md`, and `docs/releases/vX.Y.Z.md` aligned in
   the release pull request.
-- Create a release tag only from a commit contained in protected `main`, after
-  every required pull-request check has passed.
+- Create a signed release tag only from a commit contained in protected `main`,
+  after every required pull-request check has passed. Verify the signature
+  locally before pushing the tag.
 - Never move or reuse a published version tag. Prepare a new patch release for
   corrections.
 - Treat GHCR version and source-commit tags as deployment artifacts; do not use
