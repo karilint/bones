@@ -192,8 +192,11 @@ When changing Django code, templates, filters, forms, navigation, or history:
   dependency declarations.
 - Treat `app/requirements.txt` and `app/requirements-ci.txt` as generated,
   hash-locked files; do not edit package versions or hashes by hand.
-- Regenerate both lockfiles with `pip-compile --generate-hashes --strip-extras`
-  under Python 3.14 whenever an input dependency changes.
+- Regenerate the runtime lock with
+  `pip-compile --generate-hashes --strip-extras` and the CI lock with
+  `pip-compile --allow-unsafe --generate-hashes --strip-extras` under Python
+  3.14 whenever an input dependency changes. The CI lock includes its pinned
+  bootstrap tooling so every installed package remains hash checked.
 - The application image installs `requirements.txt`; GitHub CI installs
   `requirements-ci.txt`, which additionally includes Ruff.
 
