@@ -51,8 +51,10 @@ python -m piptools compile --generate-hashes --strip-extras --output-file=requir
 python -m piptools compile --allow-unsafe --generate-hashes --strip-extras --output-file=requirements-ci.txt requirements-ci.in
 ```
 
-CI repeats these commands without upgrading already valid pins and fails when
-the generated files differ from the committed lock files.
+CI repeats these commands without upgrading already valid pins and fails on
+semantic lock drift. Repeated identical hashes emitted by Dependabot are
+accepted because they do not change the allowed artifacts; changed versions,
+dependencies, or hash sets still fail.
 
 ## Pull requests and commits
 
@@ -64,6 +66,10 @@ the generated files differ from the committed lock files.
   and linear history, and GitHub merges accepted pull requests by squash only.
 - Update user-facing documentation and release notes when behavior or
   deployment requirements change.
+- Sign local commits and release tags with the repository's configured signing
+  key. GitHub requires verified signatures on `main` and future release tags.
+  Maintainer public signing identities are recorded in
+  `.github/allowed_signers` for local verification.
 
 By contributing, you agree that your contribution is licensed under the
 repository's [MIT License](LICENSE).
