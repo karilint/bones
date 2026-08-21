@@ -2,13 +2,14 @@
 
 ## Supported Versions
 
-Bones does not currently publish versioned releases. Security fixes are applied
-to the latest code on the `main` branch only.
+Security fixes are developed on `main` and released for the current major
+version when users need an updated deployable artifact.
 
 | Version | Supported |
 | --- | --- |
-| `main` | Yes |
-| Older commits and branches | No |
+| `1.x` | Yes |
+| `main` | Development |
+| `< 1.0` | No |
 
 ## Reporting a Vulnerability
 

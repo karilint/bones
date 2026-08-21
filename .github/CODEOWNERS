@@ -1,0 +1,4 @@
+# Default ownership. Approval is intentionally not required while the project
+# has a single maintainer; this mapping provides review visibility and a clear
+# place to add component owners later.
+* @karilint
