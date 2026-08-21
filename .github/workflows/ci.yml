@@ -39,6 +39,13 @@ jobs:
       - name: Install dependencies
         run: python -m pip install --require-hashes -r app/requirements-ci.txt
 
+      - name: Verify dependency locks
+        working-directory: app
+        run: |
+          python -m piptools compile --generate-hashes --strip-extras --quiet --output-file=requirements.txt requirements.in
+          python -m piptools compile --allow-unsafe --generate-hashes --strip-extras --quiet --output-file=requirements-ci.txt requirements-ci.in
+          git diff --exit-code -- requirements.txt requirements-ci.txt
+
       - name: Check Python correctness
         run: ruff check --select E9,F63,F7,F82 app
 

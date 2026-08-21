@@ -39,6 +39,21 @@ impact, and follow the existing Django architecture documented in
 
 6. Push the branch and open a pull request using the repository template.
 
+## Dependency updates
+
+Edit `app/requirements.in` for runtime dependencies or
+`app/requirements-ci.in` for CI-only tools. Under Python 3.14, regenerate and
+commit both hash-locked outputs:
+
+```powershell
+Set-Location app
+python -m piptools compile --generate-hashes --strip-extras --output-file=requirements.txt requirements.in
+python -m piptools compile --allow-unsafe --generate-hashes --strip-extras --output-file=requirements-ci.txt requirements-ci.in
+```
+
+CI repeats these commands without upgrading already valid pins and fails when
+the generated files differ from the committed lock files.
+
 ## Pull requests and commits
 
 - Keep each pull request reviewable and limited to one coherent outcome.
