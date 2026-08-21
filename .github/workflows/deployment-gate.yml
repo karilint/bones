@@ -1,0 +1,81 @@
+name: Deployment gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Protected GitHub Environment to target
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      image_digest:
+        description: Immutable ghcr.io/karilint/bones sha256 digest
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify deployment artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: ${{ inputs.environment }}
+      url: https://github.com/${{ github.repository }}/pkgs/container/bones
+    permissions:
+      attestations: read
+      contents: read
+      packages: read
+    steps:
+      - name: Validate immutable image reference
+        id: image
+        shell: bash
+        env:
+          IMAGE_DIGEST: ${{ inputs.image_digest }}
+          IMAGE_NAME: ghcr.io/${{ github.repository }}
+        run: |
+          if [[ ! "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "image_digest must be a sha256 digest, not a mutable tag" >&2
+            exit 1
+          fi
+          image="${IMAGE_NAME,,}@${IMAGE_DIGEST}"
+          echo "reference=${image}" >> "${GITHUB_OUTPUT}"
+
+      - name: Log in to GHCR
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "${GH_TOKEN}" | docker login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+
+      - name: Verify GitHub build provenance
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE_REFERENCE: ${{ steps.image.outputs.reference }}
+        run: >-
+          gh attestation verify "oci://${IMAGE_REFERENCE}"
+          --repo "${GITHUB_REPOSITORY}"
+          --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml"
+          --source-ref "${GITHUB_REF}"
+
+      - name: Pull verified artifact
+        shell: bash
+        env:
+          IMAGE_REFERENCE: ${{ steps.image.outputs.reference }}
+        run: docker pull "${IMAGE_REFERENCE}"
+
+      - name: Record deployment artifact
+        shell: bash
+        env:
+          DEPLOYMENT_ENVIRONMENT: ${{ inputs.environment }}
+          IMAGE_REFERENCE: ${{ steps.image.outputs.reference }}
+        run: |
+          echo "### Verified deployment artifact" >> "${GITHUB_STEP_SUMMARY}"
+          echo "" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Environment: \`${DEPLOYMENT_ENVIRONMENT}\`" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Image: \`${IMAGE_REFERENCE}\`" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Provenance: verified for \`${GITHUB_REPOSITORY}\`" >> "${GITHUB_STEP_SUMMARY}"
