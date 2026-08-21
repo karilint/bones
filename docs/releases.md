@@ -36,5 +36,7 @@ Release containers are published to `ghcr.io/karilint/bones` with these tags:
 - `latest` for the newest stable release.
 
 Production deployments should pin the complete version or source-commit tag.
+Prefer the immutable digest and verify it through the
+[deployment gate](deployments.md) before rollout.
 Every image includes an SBOM and BuildKit provenance, plus a GitHub artifact
 attestation bound to the published digest.
