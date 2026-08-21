@@ -1,0 +1,69 @@
+name: Bug report
+description: Report a reproducible problem in Bones
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Do not include secrets, private database
+        records, or vulnerability details in this public issue.
+  - type: input
+    id: version
+    attributes:
+      label: Bones version
+      description: Release, image digest, or commit SHA where the problem occurs.
+      placeholder: v1.0.0 or f71f62e
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Problem
+      description: What happened, and what impact does it have?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Provide the smallest deterministic sequence that reproduces it.
+      placeholder: |
+        1. Open ...
+        2. Filter by ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      options:
+        - Local development
+        - Staging
+        - Production
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized diagnostics
+      description: Add relevant logs, traceback, browser, OS, and database driver details.
+      render: shell
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Data and security checks
+      options:
+        - label: I removed credentials, personal data, and private field records.
+          required: true
+        - label: This is not a security vulnerability requiring private reporting.
+          required: true

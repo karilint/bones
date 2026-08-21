@@ -1,0 +1,38 @@
+name: Feature request
+description: Propose a focused improvement to Bones
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or need
+      description: Describe the user or operational need, not only a proposed implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: What should users be able to do when this is complete?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach
+      description: Include relevant pages, workflows, filters, or deployment behavior.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope checks
+      options:
+        - label: I searched existing issues for the same request.
+          required: true
+        - label: I have not included secrets, personal data, or private field records.
+          required: true

@@ -15,6 +15,13 @@ Stable containers are published to `ghcr.io/karilint/bones` with version and
 source-commit tags. Production deployments should use an immutable version or
 commit tag rather than `latest`.
 
+## Contributing
+
+Bug reports and focused pull requests are welcome. Read
+[`CONTRIBUTING.md`](CONTRIBUTING.md) for the development workflow, required
+checks, data-safety expectations, and protected-branch rules. Report security
+issues privately according to [the security policy](.github/SECURITY.md).
+
 ## Prerequisites
 
 * Python 3.14
