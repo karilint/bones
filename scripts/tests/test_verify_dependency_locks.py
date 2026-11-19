@@ -23,6 +23,14 @@ class NormalizeLockTests(TestCase):
 
         self.assertEqual(normalize_lock(LOCK), normalize_lock(duplicated))
 
+    def test_repeated_hash_with_different_continuation_is_ignored(self):
+        duplicated = LOCK.replace(
+            "    --hash=sha256:second\n",
+            "    --hash=sha256:second \\\n    --hash=sha256:second\n",
+        )
+
+        self.assertEqual(normalize_lock(LOCK), normalize_lock(duplicated))
+
     def test_same_hash_in_separate_packages_is_preserved(self):
         content = "one==1 \\\n    --hash=sha256:same\ntwo==2 \\\n    --hash=sha256:same\n"
 

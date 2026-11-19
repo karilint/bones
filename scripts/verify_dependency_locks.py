@@ -15,9 +15,12 @@ def normalize_lock(content: str) -> str:
     for line in content.splitlines():
         stripped = line.strip()
         if stripped.startswith("--hash="):
-            if stripped in package_hashes:
+            hash_line = stripped.removesuffix("\\").rstrip()
+            if hash_line in package_hashes:
                 continue
-            package_hashes.add(stripped)
+            package_hashes.add(hash_line)
+            normalized.append(line.rstrip().removesuffix("\\").rstrip())
+            continue
         elif line and not line[0].isspace() and not line.startswith("#"):
             package_hashes.clear()
         normalized.append(line)
